@@ -7,3 +7,4 @@ prophet==1.1.5
 python-dotenv==1.0.1
 httpx==0.27.0
 python-multipart==0.0.9
+plotly==5.22.0

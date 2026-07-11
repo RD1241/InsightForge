@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 # Import routers
-from routers import dataset, forecasting
+from routers import dataset, forecasting, agent
 
 app = FastAPI(
     title="InsightForge API",
@@ -22,6 +22,7 @@ app = FastAPI(
 # Include Routers
 app.include_router(dataset.router)
 app.include_router(forecasting.router)
+app.include_router(agent.router)
 
 # Configure CORS for local development
 app.add_middleware(
