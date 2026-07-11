@@ -11,14 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 # Import routers
-from routers import dataset
-
+from routers import dataset, forecasting
 
 app = FastAPI(
     title="InsightForge API",
     description="AI-powered Retail Decision Support System Backend",
     version="1.0.0"
 )
+
+# Include Routers
+app.include_router(dataset.router)
+app.include_router(forecasting.router)
 
 # Configure CORS for local development
 app.add_middleware(
@@ -28,9 +31,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Include Routers
-app.include_router(dataset.router)
 
 @app.get("/api/health")
 async def health_check():
