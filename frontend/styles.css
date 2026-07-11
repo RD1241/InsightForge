@@ -836,3 +836,115 @@ a {
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.15);
 }
+
+/* 
+================================================================
+  PRODUCTION POLISH EXTENSIONS (SPINNERS, MICRO-ANIMATIONS, VIVA)
+================================================================
+*/
+
+/* Chart Loader Overlay & Wrapper */
+.chart-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.chart-loader {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    z-index: 10;
+    transition: opacity 0.3s ease;
+    border-radius: 8px;
+}
+
+.chart-loader.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Spinner Animation */
+.spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    border-top-color: var(--accent);
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.chart-loader span {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Interactive Card Elevations & Hover scaling */
+.card {
+    transition: transform var(--transition-speed) cubic-bezier(0.16, 1, 0.3, 1),
+                border-color var(--transition-speed) ease,
+                box-shadow var(--transition-speed) ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(99, 102, 241, 0.25);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.btn {
+    transition: transform var(--transition-speed) cubic-bezier(0.16, 1, 0.3, 1),
+                background-color var(--transition-speed) ease,
+                border-color var(--transition-speed) ease;
+}
+
+.btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+.menu-item:hover:not(.disabled) {
+    padding-left: 1.15rem;
+}
+
+/* Accordion Open State helper */
+.rotated {
+    transform: rotate(180deg);
+}
+
+.viva-q-box {
+    background-color: rgba(255, 255, 255, 0.01);
+    border: 1px solid rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    padding: 1rem;
+    transition: background-color 0.2s ease;
+}
+
+.viva-q-box:hover {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.max-w-500 {
+    max-width: 500px;
+}
+.mx-auto {
+    margin-left: auto;
+    margin-right: auto;
+}
+.p-8 {
+    padding: 2.5rem;
+}

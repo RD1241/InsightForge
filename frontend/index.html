@@ -213,8 +213,12 @@
                                 <h3>Daily Units Sold Trend</h3>
                                 <button class="btn btn-icon explain-chart-btn" data-chart="sales_trend"><i data-lucide="sparkles"></i> Explain</button>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body chart-wrapper">
                                 <div id="chart-sales-trend" class="plotly-container"></div>
+                                <div class="chart-loader" id="loader-sales-trend">
+                                    <div class="spinner"></div>
+                                    <span>Generating sales trendline...</span>
+                                </div>
                             </div>
                         </div>
                         
@@ -224,8 +228,12 @@
                                 <h3>Variable Correlation Matrix</h3>
                                 <button class="btn btn-icon explain-chart-btn" data-chart="correlation_matrix"><i data-lucide="sparkles"></i> Explain</button>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body chart-wrapper">
                                 <div id="chart-correlation" class="plotly-container"></div>
+                                <div class="chart-loader" id="loader-correlation">
+                                    <div class="spinner"></div>
+                                    <span>Calculating correlations...</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -237,8 +245,12 @@
                                 <h3>Weekly Seasonality Profile</h3>
                                 <button class="btn btn-icon explain-chart-btn" data-chart="weekly_seasonality"><i data-lucide="sparkles"></i> Explain</button>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body chart-wrapper">
                                 <div id="chart-weekly" class="plotly-container"></div>
+                                <div class="chart-loader" id="loader-weekly">
+                                    <div class="spinner"></div>
+                                    <span>Computing weekly profile...</span>
+                                </div>
                             </div>
                         </div>
                         
@@ -248,8 +260,12 @@
                                 <h3>Monthly Seasonality Profile</h3>
                                 <button class="btn btn-icon explain-chart-btn" data-chart="monthly_seasonality"><i data-lucide="sparkles"></i> Explain</button>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body chart-wrapper">
                                 <div id="chart-monthly" class="plotly-container"></div>
+                                <div class="chart-loader" id="loader-monthly">
+                                    <div class="spinner"></div>
+                                    <span>Computing yearly seasonality...</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -298,6 +314,17 @@
                                 <div class="progress-bar-fill" id="training-progress-fill"></div>
                             </div>
                             <span class="text-sm mt-1 block text-center" id="training-progress-text">Fitting model trees...</span>
+                        </div>
+                    </div>
+
+                    <!-- Model Not Trained Empty State -->
+                    <div class="card glassmorphic mt-6 text-center" id="forecast-empty-state">
+                        <div class="card-body p-8 flex-col align-center justify-center gap-4">
+                            <div class="empty-state-icon">
+                                <i data-lucide="line-chart" class="warning-color" style="width: 48px; height: 48px;"></i>
+                            </div>
+                            <h3>Forecasting Workspace Offline</h3>
+                            <p class="text-secondary max-w-500 mx-auto">Models have not been trained for the active dataset yet. Click the "Train Forecasting Models" button above to run optimization for Linear Regression, Random Forest, and Prophet models.</p>
                         </div>
                     </div>
 
@@ -363,8 +390,12 @@
                                     </div>
                                     <button class="btn btn-icon explain-chart-btn" data-chart="demand_forecast"><i data-lucide="sparkles"></i> Explain</button>
                                 </div>
-                                <div class="card-body">
+                                <div class="card-body chart-wrapper">
                                     <div id="chart-forecast" class="plotly-container"></div>
+                                    <div class="chart-loader" id="loader-forecast">
+                                        <div class="spinner"></div>
+                                        <span>Simulating demand bounds...</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -418,6 +449,39 @@
                                         <li><strong>MAPE (Mean Absolute % Error):</strong> Standard percentage discrepancy. An error rate of 10% or less represents high forecasting accuracy.</li>
                                         <li><strong>R² (R-squared):</strong> Explains validation variance fit. 1.0 is a perfect fit, closer to 1.0 is better.</li>
                                     </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Examiner's Viva Helper Card -->
+                    <div class="card glassmorphic mt-6">
+                        <div class="card-header cursor-pointer" id="viva-helper-header" style="user-select: none;">
+                            <div class="flex-row align-center justify-between w-full">
+                                <div class="flex-row align-center gap-2">
+                                    <i data-lucide="help-circle" class="accent-color"></i>
+                                    <h3>ML Explainability & Examiner's Viva Guide</h3>
+                                </div>
+                                <i data-lucide="chevron-down" id="viva-chevron" style="transition: transform 0.3s ease;"></i>
+                            </div>
+                        </div>
+                        <div class="card-body hidden" id="viva-helper-body">
+                            <div class="grid grid-2 gap-6 mt-2">
+                                <div class="viva-q-box" style="border-left: 3px solid var(--accent); padding-left: 12px;">
+                                    <h4 style="font-size: 0.95rem; font-weight: 600;">Q1: Why use a chronological train/test split instead of random split?</h4>
+                                    <p class="text-xs text-secondary mt-2">Randomly shuffling time series data causes "temporal leakage" (where future dates leak into the past). We split our data chronologically—training on historical periods and validating on the final 30 days—to evaluate the models under realistic forecasting conditions.</p>
+                                </div>
+                                <div class="viva-q-box" style="border-left: 3px solid var(--success); padding-left: 12px;">
+                                    <h4 style="font-size: 0.95rem; font-weight: 600;">Q2: How does recursive forecasting work for Machine Learning models?</h4>
+                                    <p class="text-xs text-secondary mt-2">Autoregressive models (Linear Regression, Random Forest) use lag variables ($t-1, t-7$, etc.). To predict the next 30 days, we do not have actual future sales, so we calculate the prediction for day $t$, append it to our sales timeline buffer, and use it as a feature to predict day $t+1$.</p>
+                                </div>
+                                <div class="viva-q-box" style="border-left: 3px solid var(--warning); padding-left: 12px;">
+                                    <h4 style="font-size: 0.95rem; font-weight: 600;">Q3: How are the 95% forecast confidence intervals calculated?</h4>
+                                    <p class="text-xs text-secondary mt-2">Prophet calculates uncertainty bounds natively. For Linear Regression and Random Forest, we compute the residual standard deviation ($\sigma_e$) on the training set: $\sigma_e = \sqrt{\frac{1}{N}\sum(y_t - \hat{y}_t)^2}$. The 95% confidence bands are projected as: $\text{prediction} \pm 1.96 \cdot \sigma_e$.</p>
+                                </div>
+                                <div class="viva-q-box" style="border-left: 3px solid var(--accent); padding-left: 12px;">
+                                    <h4 style="font-size: 0.95rem; font-weight: 600;">Q4: Why compare Prophet with Random Forest and Linear Regression?</h4>
+                                    <p class="text-xs text-secondary mt-2">Prophet excels at decomposing additive weekly/yearly seasonality profiles and price discount surges. Random Forest is a non-linear ensemble model that excels at mapping complex, interactive features. Linear Regression serves as our baseline reference model.</p>
                                 </div>
                             </div>
                         </div>

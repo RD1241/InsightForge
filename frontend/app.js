@@ -116,6 +116,19 @@ document.addEventListener("DOMContentLoaded", () => {
         recommenderModelName: document.getElementById("recommender-model-name"),
         recommenderReasonText: document.getElementById("recommender-reason-text"),
         metricsCompareTable: document.getElementById("metrics-compare-table").querySelector("tbody"),
+        forecastEmptyState: document.getElementById("forecast-empty-state"),
+        
+        // Viva Helper Accordion
+        vivaHelperHeader: document.getElementById("viva-helper-header"),
+        vivaHelperBody: document.getElementById("viva-helper-body"),
+        vivaChevron: document.getElementById("viva-chevron"),
+        
+        // Chart Loaders
+        loaderSalesTrend: document.getElementById("loader-sales-trend"),
+        loaderCorrelation: document.getElementById("loader-correlation"),
+        loaderWeekly: document.getElementById("loader-weekly"),
+        loaderMonthly: document.getElementById("loader-monthly"),
+        loaderForecast: document.getElementById("loader-forecast"),
         
         // Chat Panel
         chatPanel: document.getElementById("chat-panel"),
@@ -372,6 +385,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- EDA Page Logic ---
     async function loadEdaPage() {
+        // Show chart spinners
+        el.loaderSalesTrend.classList.remove("hidden");
+        el.loaderCorrelation.classList.remove("hidden");
+        el.loaderWeekly.classList.remove("hidden");
+        el.loaderMonthly.classList.remove("hidden");
+        
         try {
             const eda = await api.get("/api/dataset/eda");
             state.edaData = eda;
@@ -387,6 +406,12 @@ document.addEventListener("DOMContentLoaded", () => {
             drawCorrelationChart(eda.correlation_matrix);
             drawSeasonalityChart("chart-weekly", eda.weekly_seasonality, "Weekly Seasonality Pattern", "Day of Week");
             drawSeasonalityChart("chart-monthly", eda.monthly_seasonality, "Monthly Seasonality Pattern", "Month");
+            
+            // Hide chart spinners on success
+            el.loaderSalesTrend.classList.add("hidden");
+            el.loaderCorrelation.classList.add("hidden");
+            el.loaderWeekly.classList.add("hidden");
+            el.loaderMonthly.classList.add("hidden");
             
             // Populate Outliers Table
             let outliersHtml = "";
@@ -409,6 +434,11 @@ document.addEventListener("DOMContentLoaded", () => {
             
         } catch (error) {
             console.error("EDA Loading failed:", error);
+            // Hide spinners even on failure
+            el.loaderSalesTrend.classList.add("hidden");
+            el.loaderCorrelation.classList.add("hidden");
+            el.loaderWeekly.classList.add("hidden");
+            el.loaderMonthly.classList.add("hidden");
         }
     }
 
@@ -484,9 +514,11 @@ document.addEventListener("DOMContentLoaded", () => {
             // Check if training report exists in backend
             const report = await api.get("/api/forecast/report").catch(() => null);
             if (report) {
+                el.forecastEmptyState.classList.add("hidden");
                 displayTrainingReport(report);
             } else {
-                // Not trained yet
+                // Not trained yet - show empty state and hide work areas
+                el.forecastEmptyState.classList.remove("hidden");
                 el.forecastSummaryContainer.classList.add("hidden");
                 el.forecastWorkspace.classList.add("hidden");
             }
@@ -526,6 +558,7 @@ document.addEventListener("DOMContentLoaded", () => {
             setTimeout(() => {
                 el.trainingProgressBox.classList.add("hidden");
                 el.trainModelsBtn.disabled = false;
+                el.forecastEmptyState.classList.add("hidden");
                 displayTrainingReport(data.report);
             }, 1000);
             
@@ -612,6 +645,9 @@ document.addEventListener("DOMContentLoaded", () => {
     async function generateForecast() {
         if (!state.activeProduct) return;
         
+        // Show forecast overlay spinner
+        el.loaderForecast.classList.remove("hidden");
+        
         const productId = state.activeProduct;
         const horizon = el.forecastHorizonSelect.value;
         const selectedModelVal = el.forecastModelSelect.value;
@@ -640,8 +676,12 @@ document.addEventListener("DOMContentLoaded", () => {
             // Draw Forecast
             drawForecastChart(data);
             
+            // Hide spinner on success
+            el.loaderForecast.classList.add("hidden");
         } catch (error) {
             console.error("Forecast failed:", error);
+            // Hide spinner even on failure
+            el.loaderForecast.classList.add("hidden");
             alert(`Error generating forecast: ${error.message}`);
         } finally {
             el.runForecastBtn.disabled = false;
@@ -796,7 +836,6 @@ document.addEventListener("DOMContentLoaded", () => {
         
         try {
             // Call Backend Chat endpoint
-            // (We will write the endpoint in Module 6, but we structure the call now)
             const response = await fetch(`${API_URL}/api/agent/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -885,6 +924,20 @@ document.addEventListener("DOMContentLoaded", () => {
             return "Please load data and run 'Train Forecasting Models' first so I can analyze the metrics.";
         }
         return "I am connected. Once the AI Agent router is activated in Module 6, I will query the models and dataset to explain any specific questions you ask!";
+    }
+
+    // Viva Helper accordion toggle
+    if (el.vivaHelperHeader) {
+        el.vivaHelperHeader.addEventListener("click", () => {
+            const isHidden = el.vivaHelperBody.classList.contains("hidden");
+            if (isHidden) {
+                el.vivaHelperBody.classList.remove("hidden");
+                el.vivaChevron.classList.add("rotated");
+            } else {
+                el.vivaHelperBody.classList.add("hidden");
+                el.vivaChevron.classList.remove("rotated");
+            }
+        });
     }
 
     // Run startup status check
