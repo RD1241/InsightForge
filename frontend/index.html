@@ -304,10 +304,16 @@
                                 <h3>Model Optimization & Forecasting</h3>
                                 <p class="text-secondary mt-1">Train Linear Regression, Random Forest, and Prophet models for all products. The system automatically recommends the best-performing model based on cross-validation.</p>
                             </div>
-                            <button class="btn btn-primary btn-large" id="train-models-btn">
-                                <i data-lucide="refresh-cw"></i>
-                                <span>Train Forecasting Models</span>
-                            </button>
+                            <div class="flex-row gap-2">
+                                <button class="btn btn-secondary" id="open-viva-modal-btn">
+                                    <i data-lucide="help-circle"></i>
+                                    <span>Viva Guide</span>
+                                </button>
+                                <button class="btn btn-primary btn-large" id="train-models-btn">
+                                    <i data-lucide="refresh-cw"></i>
+                                    <span>Train Forecasting Models</span>
+                                </button>
+                            </div>
                         </div>
                         <div id="training-progress-box" class="mt-4 hidden">
                             <div class="progress-bar-container">
@@ -374,10 +380,16 @@
                                         </div>
                                     </div>
                                     
-                                    <button class="btn btn-secondary" id="run-forecast-btn">
-                                        <i data-lucide="sparkles"></i>
-                                        <span>Generate Forecast</span>
-                                    </button>
+                                    <div class="flex-row gap-2">
+                                        <button class="btn btn-secondary" id="export-report-btn">
+                                            <i data-lucide="download"></i>
+                                            <span>Export Report</span>
+                                        </button>
+                                        <button class="btn btn-primary" id="run-forecast-btn">
+                                            <i data-lucide="sparkles"></i>
+                                            <span>Generate Forecast</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -453,39 +465,6 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- Examiner's Viva Helper Card -->
-                    <div class="card glassmorphic mt-6">
-                        <div class="card-header cursor-pointer" id="viva-helper-header" style="user-select: none;">
-                            <div class="flex-row align-center justify-between w-full">
-                                <div class="flex-row align-center gap-2">
-                                    <i data-lucide="help-circle" class="accent-color"></i>
-                                    <h3>ML Explainability & Examiner's Viva Guide</h3>
-                                </div>
-                                <i data-lucide="chevron-down" id="viva-chevron" style="transition: transform 0.3s ease;"></i>
-                            </div>
-                        </div>
-                        <div class="card-body hidden" id="viva-helper-body">
-                            <div class="grid grid-2 gap-6 mt-2">
-                                <div class="viva-q-box" style="border-left: 3px solid var(--accent); padding-left: 12px;">
-                                    <h4 style="font-size: 0.95rem; font-weight: 600;">Q1: Why use a chronological train/test split instead of random split?</h4>
-                                    <p class="text-xs text-secondary mt-2">Randomly shuffling time series data causes "temporal leakage" (where future dates leak into the past). We split our data chronologically—training on historical periods and validating on the final 30 days—to evaluate the models under realistic forecasting conditions.</p>
-                                </div>
-                                <div class="viva-q-box" style="border-left: 3px solid var(--success); padding-left: 12px;">
-                                    <h4 style="font-size: 0.95rem; font-weight: 600;">Q2: How does recursive forecasting work for Machine Learning models?</h4>
-                                    <p class="text-xs text-secondary mt-2">Autoregressive models (Linear Regression, Random Forest) use lag variables ($t-1, t-7$, etc.). To predict the next 30 days, we do not have actual future sales, so we calculate the prediction for day $t$, append it to our sales timeline buffer, and use it as a feature to predict day $t+1$.</p>
-                                </div>
-                                <div class="viva-q-box" style="border-left: 3px solid var(--warning); padding-left: 12px;">
-                                    <h4 style="font-size: 0.95rem; font-weight: 600;">Q3: How are the 95% forecast confidence intervals calculated?</h4>
-                                    <p class="text-xs text-secondary mt-2">Prophet calculates uncertainty bounds natively. For Linear Regression and Random Forest, we compute the residual standard deviation ($\sigma_e$) on the training set: $\sigma_e = \sqrt{\frac{1}{N}\sum(y_t - \hat{y}_t)^2}$. The 95% confidence bands are projected as: $\text{prediction} \pm 1.96 \cdot \sigma_e$.</p>
-                                </div>
-                                <div class="viva-q-box" style="border-left: 3px solid var(--accent); padding-left: 12px;">
-                                    <h4 style="font-size: 0.95rem; font-weight: 600;">Q4: Why compare Prophet with Random Forest and Linear Regression?</h4>
-                                    <p class="text-xs text-secondary mt-2">Prophet excels at decomposing additive weekly/yearly seasonality profiles and price discount surges. Random Forest is a non-linear ensemble model that excels at mapping complex, interactive features. Linear Regression serves as our baseline reference model.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </section>
                 
             </main>
@@ -532,6 +511,107 @@
                 </button>
             </div>
         </aside>
+    </div>
+
+    <!-- Help / Viva Guide Modal Overlay -->
+    <div class="modal-backdrop hidden" id="viva-modal">
+        <div class="modal card glassmorphic">
+            <div class="modal-header">
+                <div class="flex-row align-center gap-2">
+                    <i data-lucide="help-circle" class="accent-color"></i>
+                    <h3>ML Explainability & Examiner's Viva Guide</h3>
+                </div>
+                <button class="modal-close-btn" id="close-viva-modal-btn">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body scrollable-y">
+                <div class="grid grid-2 gap-6">
+                    <div class="viva-q-box" style="border-left: 3px solid var(--accent); padding-left: 12px;">
+                        <h4 style="font-size: 0.95rem; font-weight: 600;">Q1: Why use a chronological train/test split instead of random split?</h4>
+                        <p class="text-xs text-secondary mt-2">Randomly shuffling time series data causes "temporal leakage" (where future dates leak into the past). We split our data chronologically—training on historical periods and validating on the final 30 days—to evaluate the models under realistic forecasting conditions.</p>
+                    </div>
+                    <div class="viva-q-box" style="border-left: 3px solid var(--success); padding-left: 12px;">
+                        <h4 style="font-size: 0.95rem; font-weight: 600;">Q2: How does recursive forecasting work for Machine Learning models?</h4>
+                        <p class="text-xs text-secondary mt-2">Autoregressive models (Linear Regression, Random Forest) use lag variables ($t-1, t-7$, etc.). To predict the next 30 days, we do not have actual future sales, so we calculate the prediction for day $t$, append it to our sales timeline buffer, and use it as a feature to predict day $t+1$.</p>
+                    </div>
+                    <div class="viva-q-box" style="border-left: 3px solid var(--warning); padding-left: 12px;">
+                        <h4 style="font-size: 0.95rem; font-weight: 600;">Q3: How are the 95% forecast confidence intervals calculated?</h4>
+                        <p class="text-xs text-secondary mt-2">Prophet calculates uncertainty bounds natively. For Linear Regression and Random Forest, we compute the residual standard deviation ($\sigma_e$) on the training set: $\sigma_e = \sqrt{\frac{1}{N}\sum(y_t - \hat{y}_t)^2}$. The 95% confidence bands are projected as: $\text{prediction} \pm 1.96 \cdot \sigma_e$.</p>
+                    </div>
+                    <div class="viva-q-box" style="border-left: 3px solid var(--accent); padding-left: 12px;">
+                        <h4 style="font-size: 0.95rem; font-weight: 600;">Q4: Why compare Prophet with Random Forest and Linear Regression?</h4>
+                        <p class="text-xs text-secondary mt-2">Prophet excels at decomposing additive weekly/yearly seasonality profiles and price discount surges. Random Forest is a non-linear ensemble model that excels at mapping complex, interactive features. Linear Regression serves as our baseline reference model.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRINT ONLY PDF REPORT TEMPLATE -->
+    <div id="print-report-template" class="print-only">
+        <div class="print-header">
+            <div class="print-logo">InsightForge</div>
+            <div class="print-title">Demand Forecast & Inventory Audit Report</div>
+            <div class="print-date" id="print-timestamp">Generated on 2026-07-12</div>
+        </div>
+        
+        <div class="print-section">
+            <h3>1. Dataset Execution Summary</h3>
+            <table class="print-table" id="print-dataset-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Total Records Ingested</td><td id="print-stat-records">-</td></tr>
+                    <tr><td>Unique Supermarket Stores</td><td id="print-stat-stores">-</td></tr>
+                    <tr><td>Unique Catalog Products</td><td id="print-stat-products">-</td></tr>
+                    <tr><td>Product Categories Profiled</td><td id="print-stat-categories">-</td></tr>
+                    <tr><td>Historical Date Range</td><td id="print-stat-dates">-</td></tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="print-section">
+            <h3>2. Demand Forecasting Details</h3>
+            <div class="print-meta-grid">
+                <div><strong>Target Product:</strong> <span id="print-product-name">-</span></div>
+                <div><strong>Recommended Model:</strong> <span id="print-best-model">-</span></div>
+                <div><strong>Validation MAE:</strong> <span id="print-mae">-</span></div>
+                <div><strong>Validation MAPE (Error):</strong> <span id="print-mape">-</span></div>
+            </div>
+            <div class="print-chart-container">
+                <img id="print-forecast-chart" src="" alt="Demand Forecast Visual">
+            </div>
+        </div>
+        
+        <div class="print-section page-break">
+            <h3>3. Model Cross-Validation Metrics</h3>
+            <table class="print-table" id="print-metrics-table">
+                <thead>
+                    <tr>
+                        <th>Model Name</th>
+                        <th>MAE (Mean Absolute Error)</th>
+                        <th>MAPE (Percentage Error)</th>
+                        <th>R² Score (Variance Fit)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Dynamic comparison -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="print-section">
+            <h3>4. Inventory Audit & AI Analyst Recommendations</h3>
+            <div class="print-insights">
+                <strong>AI Retail Analyst Summary:</strong>
+                <p id="print-ai-summary">Retrieving latest recommendations...</p>
+            </div>
+        </div>
     </div>
 
     <!-- Main JavaScript Core App -->

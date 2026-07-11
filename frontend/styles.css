@@ -921,9 +921,59 @@ a {
     padding-left: 1.15rem;
 }
 
-/* Accordion Open State helper */
-.rotated {
-    transform: rotate(180deg);
+/* Help Modal Styles */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: fadeIn 0.2s ease;
+}
+
+.modal {
+    width: 90%;
+    max-width: 800px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    padding: 2rem;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: color 0.2s ease;
+}
+
+.modal-close-btn:hover {
+    color: var(--text-primary);
+}
+
+.modal-body {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding-right: 0.5rem;
 }
 
 .viva-q-box {
@@ -947,4 +997,137 @@ a {
 }
 .p-8 {
     padding: 2.5rem;
+}
+
+/* 
+================================================================
+  PRINT MEDIA STYLING (FOR VECTOR REPORT EXPORT)
+================================================================
+*/
+
+@media screen {
+    .print-only {
+        display: none !important;
+    }
+}
+
+@media print {
+    body, html {
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-family: 'Inter', sans-serif;
+        height: auto !important;
+        overflow: visible !important;
+        font-size: 13px !important;
+    }
+    
+    .app-container {
+        display: block !important;
+        height: auto !important;
+        overflow: visible !important;
+    }
+    
+    /* Hide everything on screen except print template */
+    .sidebar, .main-layout, .chat-panel, .modal-backdrop {
+        display: none !important;
+    }
+    
+    .print-only {
+        display: block !important;
+    }
+    
+    .print-header {
+        border-bottom: 2px solid #334155;
+        padding-bottom: 1rem;
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+    }
+    
+    .print-logo {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1e293b;
+    }
+    
+    .print-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #475569;
+    }
+    
+    .print-date {
+        font-size: 0.85rem;
+        color: #64748b;
+    }
+    
+    .print-section {
+        margin-bottom: 2rem;
+    }
+    
+    .print-section h3 {
+        font-size: 1.1rem;
+        color: #1e293b;
+        border-bottom: 1px solid #cbd5e1;
+        padding-bottom: 0.35rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .print-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+    }
+    
+    .print-chart-container {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        margin-top: 1rem;
+    }
+    
+    .print-chart-container img {
+        max-width: 100%;
+        max-height: 380px;
+        object-fit: contain;
+        border: 1px solid #cbd5e1;
+        border-radius: 4px;
+    }
+    
+    .print-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    .print-table th, .print-table td {
+        border: 1px solid #cbd5e1;
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+    }
+    
+    .print-table th {
+        background-color: #f1f5f9;
+        color: #1e293b;
+        font-weight: 600;
+    }
+    
+    .print-insights {
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background-color: #f8fafc;
+        padding: 1rem;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        color: #334155;
+    }
+    
+    .page-break {
+        page-break-before: always;
+    }
 }

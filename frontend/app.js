@@ -118,10 +118,13 @@ document.addEventListener("DOMContentLoaded", () => {
         metricsCompareTable: document.getElementById("metrics-compare-table").querySelector("tbody"),
         forecastEmptyState: document.getElementById("forecast-empty-state"),
         
-        // Viva Helper Accordion
-        vivaHelperHeader: document.getElementById("viva-helper-header"),
-        vivaHelperBody: document.getElementById("viva-helper-body"),
-        vivaChevron: document.getElementById("viva-chevron"),
+        // Help Viva Modal
+        openVivaModalBtn: document.getElementById("open-viva-modal-btn"),
+        closeVivaModalBtn: document.getElementById("close-viva-modal-btn"),
+        vivaModal: document.getElementById("viva-modal"),
+        
+        // Export PDF Button
+        exportReportBtn: document.getElementById("export-report-btn"),
         
         // Chart Loaders
         loaderSalesTrend: document.getElementById("loader-sales-trend"),
@@ -294,6 +297,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Drag-and-drop file upload
     el.dropzone.addEventListener("click", () => el.fileInput.click());
     
+    el.dropzone.style.transition = "all 0.2s ease";
     el.dropzone.addEventListener("dragover", (e) => {
         e.preventDefault();
         el.dropzone.style.borderColor = "var(--accent)";
@@ -926,16 +930,108 @@ document.addEventListener("DOMContentLoaded", () => {
         return "I am connected. Once the AI Agent router is activated in Module 6, I will query the models and dataset to explain any specific questions you ask!";
     }
 
-    // Viva Helper accordion toggle
-    if (el.vivaHelperHeader) {
-        el.vivaHelperHeader.addEventListener("click", () => {
-            const isHidden = el.vivaHelperBody.classList.contains("hidden");
-            if (isHidden) {
-                el.vivaHelperBody.classList.remove("hidden");
-                el.vivaChevron.classList.add("rotated");
+    // Viva Helper modal triggers
+    if (el.openVivaModalBtn) {
+        el.openVivaModalBtn.addEventListener("click", () => {
+            el.vivaModal.classList.remove("hidden");
+        });
+    }
+    if (el.closeVivaModalBtn) {
+        el.closeVivaModalBtn.addEventListener("click", () => {
+            el.vivaModal.classList.add("hidden");
+        });
+    }
+    if (el.vivaModal) {
+        el.vivaModal.addEventListener("click", (e) => {
+            if (e.target === el.vivaModal) {
+                el.vivaModal.classList.add("hidden");
+            }
+        });
+    }
+
+    // Export PDF Report print triggers
+    if (el.exportReportBtn) {
+        el.exportReportBtn.addEventListener("click", async () => {
+            if (!state.activeProduct || !state.trainedReport) return;
+            
+            const productId = state.activeProduct;
+            const prodData = state.trainedReport.products[productId];
+            const activeModel = el.forecastModelSelect.value;
+            
+            let modelName = prodData.best_model;
+            let mae = prodData.all_models[modelName].MAE;
+            let mape = prodData.all_models[modelName].MAPE + "%";
+            
+            if (activeModel !== "best_recommender" && prodData.all_models[activeModel]) {
+                modelName = activeModel;
+                mae = prodData.all_models[activeModel].MAE;
+                mape = prodData.all_models[activeModel].MAPE + "%";
+            }
+            
+            // 1. Populate metadata
+            document.getElementById("print-timestamp").textContent = "Generated on: " + new Date().toLocaleString();
+            document.getElementById("print-stat-records").textContent = state.datasetStats.row_count.toLocaleString();
+            document.getElementById("print-stat-stores").textContent = state.datasetStats.unique_stores;
+            document.getElementById("print-stat-products").textContent = state.datasetStats.unique_products;
+            document.getElementById("print-stat-categories").textContent = state.datasetStats.unique_categories;
+            document.getElementById("print-stat-dates").textContent = `${state.datasetStats.start_date} to ${state.datasetStats.end_date}`;
+            
+            // 2. Populate product forecast stats
+            document.getElementById("print-product-name").textContent = `${prodData.product_name} (${productId})`;
+            document.getElementById("print-best-model").textContent = modelName;
+            document.getElementById("print-mae").textContent = mae;
+            document.getElementById("print-mape").textContent = mape;
+            
+            // 3. Populate model comparison table
+            const models = Object.keys(prodData.all_models);
+            let printCompareHtml = "";
+            models.forEach(m => {
+                const mData = prodData.all_models[m];
+                printCompareHtml += `
+                    <tr>
+                        <td>${m} ${m === prodData.best_model ? '(Recommended)' : ''}</td>
+                        <td>${mData.MAE}</td>
+                        <td>${mData.MAPE}%</td>
+                        <td>${mData.R2}</td>
+                    </tr>
+                `;
+            });
+            document.querySelector("#print-metrics-table tbody").innerHTML = printCompareHtml;
+            
+            // 4. Populate AI Analyst summary paragraph
+            const botMessages = document.querySelectorAll(".message-bot .message-content p");
+            let aiSummaryHtml = "";
+            if (botMessages.length > 1) {
+                // Get the last bot message content (skipping welcome)
+                aiSummaryHtml = botMessages[botMessages.length - 1].innerHTML;
             } else {
-                el.vivaHelperBody.classList.add("hidden");
-                el.vivaChevron.classList.remove("rotated");
+                aiSummaryHtml = prodData.recommendation_reason || "No custom audit logs generated yet.";
+            }
+            document.getElementById("print-ai-summary").innerHTML = aiSummaryHtml;
+            
+            // 5. Convert Plotly SVG to image and trigger browser print dialog
+            el.exportReportBtn.disabled = true;
+            const originalBtnText = el.exportReportBtn.innerHTML;
+            el.exportReportBtn.innerHTML = "<span>Generating Image...</span>";
+            
+            try {
+                const dataUrl = await Plotly.toImage(document.getElementById('chart-forecast'), {
+                    format: 'png',
+                    width: 800,
+                    height: 400
+                });
+                
+                document.getElementById('print-forecast-chart').src = dataUrl;
+                
+                // Trigger printing
+                window.print();
+            } catch (err) {
+                console.error("Failed to generate chart image for print:", err);
+                alert("Could not render chart into PDF. Printing text details instead.");
+                window.print();
+            } finally {
+                el.exportReportBtn.disabled = false;
+                el.exportReportBtn.innerHTML = originalBtnText;
             }
         });
     }
