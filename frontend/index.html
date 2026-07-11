@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InsightForge – AI Retail Decision Support System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <!-- CSS Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-icon">
+                    <i data-lucide="activity" class="accent-color"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>InsightForge</h1>
+                    <span>Decision Support</span>
+                </div>
+            </div>
+            
+            <nav class="sidebar-menu">
+                <a href="#" class="menu-item active" data-page="data-hub">
+                    <i data-lucide="database"></i>
+                    <span>Data Hub</span>
+                </a>
+                <a href="#" class="menu-item disabled" id="nav-eda" data-page="eda">
+                    <i data-lucide="pie-chart"></i>
+                    <span>Exploratory EDA</span>
+                </a>
+                <a href="#" class="menu-item disabled" id="nav-forecast" data-page="forecasting">
+                    <i data-lucide="trending-up"></i>
+                    <span>Forecast Engine</span>
+                </a>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <button class="btn btn-secondary chat-toggle-btn" id="open-chat-btn">
+                    <i data-lucide="message-square-code"></i>
+                    <span>AI Retail Analyst</span>
+                    <span class="badge badge-pulse">AI</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Layout Area -->
+        <div class="main-layout">
+            <!-- Header -->
+            <header class="app-header">
+                <div class="header-left">
+                    <div class="breadcrumb">
+                        <span id="current-page-title">Data Hub</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="dataset-status-card" id="header-status-card">
+                        <i data-lucide="alert-circle" class="warning-color"></i>
+                        <span id="header-dataset-name">No active dataset</span>
+                        <span class="status-badge status-offline" id="header-dataset-badge">Offline</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content Scroll Container -->
+            <main class="content-container">
+                
+                <!-- 1. DATA HUB PAGE -->
+                <section class="content-page active" id="page-data-hub">
+                    <div class="welcome-banner">
+                        <div class="banner-content">
+                            <h2>Welcome to InsightForge</h2>
+                            <p>Upload your retail sales transactions or initialize the demo dataset to begin forecasting demand, validating inventory health, and generating business intelligence.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-2">
+                        <!-- Upload Container -->
+                        <div class="card glassmorphic">
+                            <div class="card-header">
+                                <div class="card-title-icon"><i data-lucide="upload-cloud"></i></div>
+                                <h3>Upload Retail Dataset</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-secondary mb-4">Supported format: CSV containing columns <code>date</code>, <code>store</code>, <code>item</code>, and <code>sales</code>. Extra metadata fields will be mapped automatically.</p>
+                                <div class="upload-dropzone" id="dropzone">
+                                    <input type="file" id="file-input" accept=".csv" class="hidden-input">
+                                    <i data-lucide="file-spreadsheet" class="upload-icon"></i>
+                                    <p class="dropzone-text">Drag & drop your CSV file here or <span class="accent-color cursor-pointer">browse</span></p>
+                                    <span class="file-info" id="selected-file-info"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Quick Demo Load -->
+                        <div class="card glassmorphic">
+                            <div class="card-header">
+                                <div class="card-title-icon"><i data-lucide="play-circle"></i></div>
+                                <h3>Retail Demo Workflow</h3>
+                            </div>
+                            <div class="card-body flex-col justify-between">
+                                <p class="text-secondary mb-4">No data on hand? Initialize our pre-scheduled retail simulator containing 2 years of sales history with weekend spikes, holiday trends, price fluctuations, and inventory stockout cycles.</p>
+                                <button class="btn btn-primary btn-large w-full mt-4" id="load-demo-btn">
+                                    <i data-lucide="cpu"></i>
+                                    <span>Initialize Demo Dataset</span>
+                                </button>
+                                <div id="demo-load-status" class="mt-3 text-center text-sm"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Validation and Summary Section -->
+                    <div class="card glassmorphic mt-6 hidden" id="dataset-summary-card">
+                        <div class="card-header flex-row justify-between align-center">
+                            <div class="flex-row align-center gap-2">
+                                <div class="card-title-icon"><i data-lucide="shield-check" class="success-color"></i></div>
+                                <h3>Dataset Validation Summary</h3>
+                            </div>
+                            <span class="badge badge-success">VALIDATED</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="stats-overview-grid">
+                                <div class="stat-box">
+                                    <span class="stat-label">Total Records</span>
+                                    <span class="stat-value" id="val-records">-</span>
+                                </div>
+                                <div class="stat-box">
+                                    <span class="stat-label">Unique Stores</span>
+                                    <span class="stat-value" id="val-stores">-</span>
+                                </div>
+                                <div class="stat-box">
+                                    <span class="stat-label">Unique Products</span>
+                                    <span class="stat-value" id="val-products">-</span>
+                                </div>
+                                <div class="stat-box">
+                                    <span class="stat-label">Product Categories</span>
+                                    <span class="stat-value" id="val-categories">-</span>
+                                </div>
+                            </div>
+                            
+                            <div class="validation-details-row mt-6">
+                                <div class="info-block">
+                                    <strong>Date Span:</strong>
+                                    <span id="val-date-range">-</span>
+                                </div>
+                                <div class="info-block">
+                                    <strong>Dataset Profile:</strong>
+                                    <p class="text-secondary mt-1" id="val-profile-text">Checking dataset details...</p>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-warning mt-4 hidden" id="validation-warnings-box">
+                                <i data-lucide="alert-triangle"></i>
+                                <div class="alert-content">
+                                    <strong>Warnings detected:</strong>
+                                    <ul class="warnings-list mt-1" id="validation-warnings-list"></ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Data Preview Table -->
+                    <div class="card glassmorphic mt-6 hidden" id="dataset-preview-card">
+                        <div class="card-header">
+                            <div class="card-title-icon"><i data-lucide="table"></i></div>
+                            <h3>Data Preview (First 10 Rows)</h3>
+                        </div>
+                        <div class="card-body scrollable-x">
+                            <table class="data-table" id="preview-table">
+                                <thead>
+                                    <!-- Dynamic -->
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. EXPLORATORY EDA PAGE -->
+                <section class="content-page" id="page-eda">
+                    <!-- EDA Statistics Summary Cards -->
+                    <div class="stats-overview-grid">
+                        <div class="stat-box card glassmorphic">
+                            <span class="stat-label">Average Price</span>
+                            <span class="stat-value" id="eda-avg-price">$0.00</span>
+                        </div>
+                        <div class="stat-box card glassmorphic">
+                            <span class="stat-label">Average Units Sold / Day</span>
+                            <span class="stat-value" id="eda-avg-sold">0</span>
+                        </div>
+                        <div class="stat-box card glassmorphic">
+                            <span class="stat-label">Total Outliers Flagged</span>
+                            <span class="stat-value warning-color" id="eda-outliers-count">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Charts Grid -->
+                    <div class="grid grid-2 mt-6">
+                        <!-- Sales Trendline -->
+                        <div class="card glassmorphic chart-card">
+                            <div class="card-header flex-row justify-between align-center">
+                                <h3>Daily Units Sold Trend</h3>
+                                <button class="btn btn-icon explain-chart-btn" data-chart="sales_trend"><i data-lucide="sparkles"></i> Explain</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="chart-sales-trend" class="plotly-container"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Correlation Heatmap -->
+                        <div class="card glassmorphic chart-card">
+                            <div class="card-header flex-row justify-between align-center">
+                                <h3>Variable Correlation Matrix</h3>
+                                <button class="btn btn-icon explain-chart-btn" data-chart="correlation_matrix"><i data-lucide="sparkles"></i> Explain</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="chart-correlation" class="plotly-container"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-2 mt-6">
+                        <!-- Weekly Seasonality -->
+                        <div class="card glassmorphic chart-card">
+                            <div class="card-header flex-row justify-between align-center">
+                                <h3>Weekly Seasonality Profile</h3>
+                                <button class="btn btn-icon explain-chart-btn" data-chart="weekly_seasonality"><i data-lucide="sparkles"></i> Explain</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="chart-weekly" class="plotly-container"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Monthly Seasonality -->
+                        <div class="card glassmorphic chart-card">
+                            <div class="card-header flex-row justify-between align-center">
+                                <h3>Monthly Seasonality Profile</h3>
+                                <button class="btn btn-icon explain-chart-btn" data-chart="monthly_seasonality"><i data-lucide="sparkles"></i> Explain</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="chart-monthly" class="plotly-container"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Outlier Table Section -->
+                    <div class="card glassmorphic mt-6">
+                        <div class="card-header">
+                            <div class="card-title-icon"><i data-lucide="activity"></i></div>
+                            <h3>Anomalous Outlier Sales Points (IQR Method)</h3>
+                        </div>
+                        <div class="card-body scrollable-y max-h-300">
+                            <table class="data-table" id="outliers-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Product ID</th>
+                                        <th>Product Name</th>
+                                        <th>Units Sold</th>
+                                        <th>Outlier Range Threshold</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. FORECAST ENGINE PAGE -->
+                <section class="content-page" id="page-forecasting">
+                    <!-- Train Control Banner -->
+                    <div class="train-control-card card glassmorphic">
+                        <div class="flex-row justify-between align-center wrap gap-4">
+                            <div>
+                                <h3>Model Optimization & Forecasting</h3>
+                                <p class="text-secondary mt-1">Train Linear Regression, Random Forest, and Prophet models for all products. The system automatically recommends the best-performing model based on cross-validation.</p>
+                            </div>
+                            <button class="btn btn-primary btn-large" id="train-models-btn">
+                                <i data-lucide="refresh-cw"></i>
+                                <span>Train Forecasting Models</span>
+                            </button>
+                        </div>
+                        <div id="training-progress-box" class="mt-4 hidden">
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" id="training-progress-fill"></div>
+                            </div>
+                            <span class="text-sm mt-1 block text-center" id="training-progress-text">Fitting model trees...</span>
+                        </div>
+                    </div>
+
+                    <!-- Forecast Summary Overview (Hidden until trained) -->
+                    <div class="grid grid-3 mt-6 hidden" id="forecast-summary-container">
+                        <div class="stat-box card glassmorphic">
+                            <span class="stat-label">Model Registry Status</span>
+                            <span class="stat-value success-color" id="registry-status">OPTIMIZED</span>
+                        </div>
+                        <div class="stat-box card glassmorphic">
+                            <span class="stat-label">Average Validation MAE</span>
+                            <span class="stat-value" id="registry-avg-mae">0.00</span>
+                        </div>
+                        <div class="stat-box card glassmorphic">
+                            <span class="stat-label">Average MAPE (Error Rate)</span>
+                            <span class="stat-value" id="registry-avg-mape">0.00%</span>
+                        </div>
+                    </div>
+
+                    <!-- Main forecasting workspace -->
+                    <div class="grid grid-3-1 mt-6 hidden" id="forecast-workspace">
+                        <!-- Forecasting Left: Selection & Plot -->
+                        <div class="flex-col gap-6">
+                            <!-- Selector Card -->
+                            <div class="card glassmorphic">
+                                <div class="card-body flex-row align-center justify-between wrap gap-4">
+                                    <div class="flex-row align-center gap-4">
+                                        <div class="form-group">
+                                            <label for="forecast-product-select">Target Product</label>
+                                            <select id="forecast-product-select" class="form-select">
+                                                <!-- Dynamic products -->
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="forecast-model-select">Active Model Override</label>
+                                            <select id="forecast-model-select" class="form-select">
+                                                <!-- Dynamic models -->
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="forecast-horizon-select">Horizon</label>
+                                            <select id="forecast-horizon-select" class="form-select w-80">
+                                                <option value="30">30 Days</option>
+                                                <option value="60">60 Days</option>
+                                                <option value="90">90 Days</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <button class="btn btn-secondary" id="run-forecast-btn">
+                                        <i data-lucide="sparkles"></i>
+                                        <span>Generate Forecast</span>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Plot Card -->
+                            <div class="card glassmorphic chart-card">
+                                <div class="card-header flex-row justify-between align-center">
+                                    <div>
+                                        <h3 id="forecast-chart-title">Demand Forecast vs Historic actuals</h3>
+                                        <span class="text-sm text-secondary" id="forecast-chart-subtitle">Linear Regression</span>
+                                    </div>
+                                    <button class="btn btn-icon explain-chart-btn" data-chart="demand_forecast"><i data-lucide="sparkles"></i> Explain</button>
+                                </div>
+                                <div class="card-body">
+                                    <div id="chart-forecast" class="plotly-container"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Forecasting Right: Model Metrics & Info -->
+                        <div class="flex-col gap-6">
+                            <!-- Recommendation Card -->
+                            <div class="card glassmorphic border-pulse">
+                                <div class="card-header">
+                                    <div class="flex-row align-center gap-2">
+                                        <i data-lucide="award" class="success-color"></i>
+                                        <h3>Best Model Recommender</h3>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="best-model-badge" id="recommender-model-name">Prophet</div>
+                                    <div class="recommendation-explanation mt-4">
+                                        <p class="text-sm text-secondary leading-relaxed" id="recommender-reason-text">Prophet is recommended due to lowest Mean Absolute Error.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Metrics Comparison Table Card -->
+                            <div class="card glassmorphic">
+                                <div class="card-header">
+                                    <h3>Model Comparison</h3>
+                                </div>
+                                <div class="card-body">
+                                    <table class="data-table text-sm" id="metrics-compare-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Model</th>
+                                                <th>MAE</th>
+                                                <th>MAPE</th>
+                                                <th>R²</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- Dynamic models comparison -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- Explanation Alert Box -->
+                            <div class="card glassmorphic bg-dark-slate">
+                                <div class="card-body text-xs leading-relaxed text-secondary">
+                                    <strong class="text-primary block mb-1">Time Series Metrics Quick Guide:</strong>
+                                    <ul class="bullets-list">
+                                        <li><strong>MAE (Mean Absolute Error):</strong> Represents the average units deviation in predictions. Lower is better.</li>
+                                        <li><strong>MAPE (Mean Absolute % Error):</strong> Standard percentage discrepancy. An error rate of 10% or less represents high forecasting accuracy.</li>
+                                        <li><strong>R² (R-squared):</strong> Explains validation variance fit. 1.0 is a perfect fit, closer to 1.0 is better.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+            </main>
+        </div>
+
+        <!-- AI Retail Analyst slide-out chat panel (collapsible) -->
+        <aside class="chat-panel" id="chat-panel">
+            <div class="chat-panel-header">
+                <div class="chat-header-title">
+                    <i data-lucide="message-square-code" class="accent-color"></i>
+                    <div>
+                        <h3>AI Retail Analyst</h3>
+                        <span>Forecasting & Inventory Copilot</span>
+                    </div>
+                </div>
+                <button class="chat-close-btn" id="close-chat-btn">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <div class="chat-messages-container" id="chat-messages">
+                <div class="message message-bot">
+                    <div class="message-avatar">
+                        <i data-lucide="bot"></i>
+                    </div>
+                    <div class="message-content">
+                        <p>Hello! I am your AI Retail Analyst. I can query our active dataset, audit inventory alerts, compare validation metrics, and explain forecasting trends directly.</p>
+                        <p>How can I assist you today?</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-suggestions-box" id="chat-suggestions">
+                <!-- Suggestion tags -->
+                <button class="suggestion-tag">Show top 5 products</button>
+                <button class="suggestion-tag">Explain the current forecast</button>
+                <button class="suggestion-tag">Show low stock alerts</button>
+            </div>
+            
+            <div class="chat-input-container">
+                <input type="text" class="chat-input" id="chat-input-text" placeholder="Ask about sales, forecasts, low stock..." autocomplete="off">
+                <button class="chat-send-btn" id="chat-send-btn">
+                    <i data-lucide="send"></i>
+                </button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Main JavaScript Core App -->
+    <script src="app.js"></script>
+</body>
+</html>
