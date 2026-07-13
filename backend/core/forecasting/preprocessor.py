@@ -2,6 +2,38 @@ import os
 import pandas as pd
 import numpy as np
 
+def smooth_outliers(df_product: pd.DataFrame, window: int = 14, threshold: float = 3.0) -> pd.DataFrame:
+    """
+    Identifies and smooths extreme sales spikes using a rolling median absolute deviation (MAD).
+    Extreme outliers (outside median +/- threshold * MAD) are clipped to the threshold bounds.
+    This prevents anomalous transaction surges from corrupting recursive lags & rolling features.
+    """
+    df_smoothed = df_product.copy()
+    
+    # Sort values to guarantee chronological order for rolling operations
+    df_smoothed = df_smoothed.sort_values(by=['product_id', 'date']).reset_index(drop=True)
+    
+    for pid, grp in df_smoothed.groupby('product_id'):
+        rolling_median = grp['units_sold'].rolling(window=window, min_periods=1, center=True).median()
+        rolling_mad = grp['units_sold'].rolling(window=window, min_periods=1, center=True).apply(
+            lambda x: np.median(np.abs(x - np.median(x))), raw=True
+        )
+        
+        # Fill zero MAD with 1.0 to avoid division by zero or collapsing intervals
+        rolling_mad = rolling_mad.fillna(1.0).replace(0.0, 1.0)
+        
+        upper_limit = rolling_median + threshold * rolling_mad
+        lower_limit = np.maximum(0, rolling_median - threshold * rolling_mad)
+        
+        indices = grp.index
+        df_smoothed.loc[indices, 'units_sold'] = np.clip(
+            grp['units_sold'].values,
+            lower_limit.values,
+            upper_limit.values
+        ).astype(int)
+        
+    return df_smoothed
+
 # A realistic catalog of 50 products to map bare item IDs (like in the Kaggle dataset)
 # to rich product names, categories, and baseline prices for the dashboard
 PRODUCT_CATALOG = {

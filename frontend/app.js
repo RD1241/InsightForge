@@ -160,6 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Forecasting Page
         trainModelsBtn: document.getElementById("train-models-btn"),
+        smoothOutliersCheck: document.getElementById("smooth-outliers-check"),
         trainingProgressBox: document.getElementById("training-progress-box"),
         trainingProgressFill: document.getElementById("training-progress-fill"),
         trainingProgressText: document.getElementById("training-progress-text"),
@@ -541,16 +542,19 @@ document.addEventListener("DOMContentLoaded", () => {
             y: trend.sales,
             type: 'scatter',
             mode: 'lines',
-            line: { color: '#6366f1', width: 2.0 },
+            line: { color: '#6366f1', width: 3.0, shape: 'spline' }, // smooth spline layout
+            fill: 'tozeroy', // glowing gradient fill under curve
+            fillcolor: 'rgba(99, 102, 241, 0.04)',
             name: 'Total Units Sold'
         };
         const layout = {
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
-            margin: { t: 20, r: 20, b: 40, l: 50 },
-            font: { color: '#94a3b8', family: 'Inter' },
-            xaxis: { gridcolor: 'rgba(255,255,255,0.05)', linecolor: 'rgba(255,255,255,0.1)' },
-            yaxis: { gridcolor: 'rgba(255,255,255,0.05)', linecolor: 'rgba(255,255,255,0.1)' }
+            margin: { t: 15, r: 15, b: 35, l: 45 },
+            font: { color: '#94a3b8', family: 'Outfit, Inter, sans-serif' },
+            hovermode: 'x',
+            xaxis: { gridcolor: 'rgba(255,255,255,0.02)', linecolor: 'rgba(255,255,255,0.06)' },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.04)', linecolor: 'rgba(255,255,255,0.06)' }
         };
         Plotly.newPlot('chart-sales-trend', [trace], layout, { responsive: true, displayModeBar: false });
     }
@@ -575,7 +579,7 @@ document.addEventListener("DOMContentLoaded", () => {
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
             margin: { t: 20, r: 20, b: 50, l: 90 },
-            font: { color: '#94a3b8', family: 'Inter' }
+            font: { color: '#94a3b8', family: 'Outfit, Inter, sans-serif' }
         };
         Plotly.newPlot('chart-correlation', [trace], layout, { responsive: true, displayModeBar: false });
     }
@@ -592,10 +596,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const layout = {
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
-            margin: { t: 20, r: 20, b: 40, l: 50 },
-            font: { color: '#94a3b8', family: 'Inter' },
-            xaxis: { gridcolor: 'rgba(255,255,255,0.02)', linecolor: 'rgba(255,255,255,0.1)' },
-            yaxis: { gridcolor: 'rgba(255,255,255,0.05)', linecolor: 'rgba(255,255,255,0.1)' }
+            margin: { t: 15, r: 15, b: 35, l: 45 },
+            font: { color: '#94a3b8', family: 'Outfit, Inter, sans-serif' },
+            xaxis: { gridcolor: 'rgba(255,255,255,0.02)', linecolor: 'rgba(255,255,255,0.06)' },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.04)', linecolor: 'rgba(255,255,255,0.06)' }
         };
         Plotly.newPlot(elementId, [trace], layout, { responsive: true, displayModeBar: false });
     }
@@ -634,7 +638,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (progress > 60) {
                     el.trainingProgressText.textContent = "Aggregating metrics and picking recommendations...";
                 } else if (progress > 30) {
-                    el.trainingProgressText.textContent = "Ftting Prophet models and holiday adjustments...";
+                    el.trainingProgressText.textContent = "Fitting Prophet models and holiday adjustments...";
                 } else {
                     el.trainingProgressText.textContent = "Extracting lags, rolling averages, and split datasets...";
                 }
@@ -642,7 +646,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 300);
         
         try {
-            const data = await api.post("/api/forecast/train");
+            const smoothOutliers = el.smoothOutliersCheck ? el.smoothOutliersCheck.checked : true;
+            const data = await api.post(`/api/forecast/train?smooth_outliers=${smoothOutliers}`);
             clearInterval(progressInterval);
             el.trainingProgressFill.style.width = "100%";
             el.trainingProgressText.textContent = "Training optimization complete!";
@@ -680,9 +685,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         el.forecastProductSelect.innerHTML = productOptions;
         
-        // Setup initial product selection state
         const pids = Object.keys(productsMap);
-        if (pids.length > 0) {
+        // Page State Cache Retention logic: if state.activeProduct is already set and valid, preserve it!
+        if (state.activeProduct && productsMap[state.activeProduct]) {
+            el.forecastProductSelect.value = state.activeProduct;
+            updateWorkspaceForProduct(state.activeProduct);
+        } else if (pids.length > 0) {
             state.activeProduct = pids[0];
             updateWorkspaceForProduct(pids[0]);
         }
@@ -793,24 +801,24 @@ document.addEventListener("DOMContentLoaded", () => {
         const foreLower = data.forecast.lower_bound;
         const foreUpper = data.forecast.upper_bound;
         
-        // Trace 1: Historical Sales
+        // Trace 1: Historical Sales (Smooth Spline, Indigo)
         const traceHist = {
             x: histDates,
             y: histSales,
             type: 'scatter',
             mode: 'lines',
-            line: { color: '#6366f1', width: 2.0 },
+            line: { color: '#6366f1', width: 2.5, shape: 'spline' },
             name: 'Historical Sales'
         };
         
-        // Trace 2: Predicted Future Demand
+        // Trace 2: Predicted Future Demand (Dashed spline, Amber)
         const tracePred = {
             x: foreDates,
             y: forePreds,
             type: 'scatter',
             mode: 'lines+markers',
-            line: { color: '#f59e0b', width: 2.5, dash: 'dash' },
-            marker: { size: 5 },
+            line: { color: '#f59e0b', width: 3.0, dash: 'dash', shape: 'spline' },
+            marker: { size: 5, color: '#f59e0b' },
             name: 'Demand Forecast'
         };
         
@@ -825,7 +833,7 @@ document.addEventListener("DOMContentLoaded", () => {
             name: '95% CI Lower'
         };
         
-        // Trace 4: Upper confidence band (filled to Trace 3)
+        // Trace 4: Upper confidence band (filled to Trace 3 with a beautiful translucent amber glow)
         const traceUpper = {
             x: foreDates,
             y: foreUpper,
@@ -833,21 +841,20 @@ document.addEventListener("DOMContentLoaded", () => {
             mode: 'lines',
             line: { width: 0 },
             fill: 'tonexty',
-            fillcolor: 'rgba(245, 158, 11, 0.1)',
+            fillcolor: 'rgba(245, 158, 11, 0.08)',
             name: '95% Confidence Interval'
         };
         
-        // Combine (Lower then Upper to ensure proper fill)
         const traces = [traceHist, traceLower, traceUpper, tracePred];
         
         const layout = {
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
-            margin: { t: 20, r: 20, b: 40, l: 50 },
-            font: { color: '#94a3b8', family: 'Inter' },
-            hovermode: 'x',
-            xaxis: { gridcolor: 'rgba(255,255,255,0.02)', linecolor: 'rgba(255,255,255,0.1)' },
-            yaxis: { gridcolor: 'rgba(255,255,255,0.05)', linecolor: 'rgba(255,255,255,0.1)' },
+            margin: { t: 15, r: 15, b: 35, l: 45 },
+            font: { color: '#94a3b8', family: 'Outfit, Inter, sans-serif' },
+            hovermode: 'x unified', // unified tooltip for modern aesthetics!
+            xaxis: { gridcolor: 'rgba(255,255,255,0.02)', linecolor: 'rgba(255,255,255,0.06)' },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.04)', linecolor: 'rgba(255,255,255,0.06)' },
             legend: { orientation: 'h', y: -0.2 }
         };
         

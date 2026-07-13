@@ -304,15 +304,21 @@
                                 <h3>Model Optimization & Forecasting</h3>
                                 <p class="text-secondary mt-1">Train Linear Regression, Random Forest, and Prophet models for all products. The system automatically recommends the best-performing model based on cross-validation.</p>
                             </div>
-                            <div class="flex-row gap-2">
-                                <button class="btn btn-secondary" id="open-viva-modal-btn">
-                                    <i data-lucide="help-circle"></i>
-                                    <span>Viva Guide</span>
-                                </button>
-                                <button class="btn btn-primary btn-large" id="train-models-btn">
-                                    <i data-lucide="refresh-cw"></i>
-                                    <span>Train Forecasting Models</span>
-                                </button>
+                            <div class="flex-row align-center gap-4 wrap">
+                                <div class="form-check flex-row align-center gap-2" style="margin-right: 1rem;">
+                                    <input type="checkbox" id="smooth-outliers-check" class="form-checkbox" checked style="width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;">
+                                    <label for="smooth-outliers-check" class="text-sm text-secondary cursor-pointer" style="cursor: pointer; user-select: none;">MAD Outlier Smoothing (Recommended)</label>
+                                </div>
+                                <div class="flex-row gap-2">
+                                    <button class="btn btn-secondary" id="open-viva-modal-btn">
+                                        <i data-lucide="help-circle"></i>
+                                        <span>Viva Guide</span>
+                                    </button>
+                                    <button class="btn btn-primary btn-large" id="train-models-btn">
+                                        <i data-lucide="refresh-cw"></i>
+                                        <span>Train Forecasting Models</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div id="training-progress-box" class="mt-4 hidden">

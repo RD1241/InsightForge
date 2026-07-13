@@ -353,7 +353,8 @@ def explain_forecast_decomposition(product_id: str) -> dict:
                     "weekly_seasonality_percent": round(season_pct, 1),
                     "promotion_impact_percent": round(promo_pct, 1)
                 },
-                "total_forecasted_units": int(round(total_pred))
+                "total_forecasted_units": int(round(total_pred)),
+                "note": "Contributions represent an analytical counterfactual approximation of forecast drivers over the 30-day horizon, not an exact mathematical cause of individual sales day spikes."
             }
             
         else:
@@ -409,7 +410,8 @@ def explain_forecast_decomposition(product_id: str) -> dict:
                     "weekly_seasonality_percent": round(season_pct, 1),
                     "promotion_impact_percent": round(promo_pct, 1)
                 },
-                "total_forecasted_units": int(round(sum_act))
+                "total_forecasted_units": int(round(sum_act)),
+                "note": "Contributions represent an analytical counterfactual approximation of forecast drivers over the 30-day horizon, not an exact mathematical cause of individual sales day spikes."
             }
     except Exception as e:
         return {"status": "error", "message": f"Decomposition failed: {str(e)}"}

@@ -14,18 +14,17 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 ACTIVE_DATASET_PATH = os.path.join(DATA_DIR, "active_dataset.csv")
 
 @router.post("/train")
-async def train_models():
+async def train_models(smooth_outliers: bool = Query(True, description="Enable rolling MAD outlier smoothing prior to training")):
     """
     Triggers the training pipeline for all products in the active dataset.
-    Trains Linear Regression, Random Forest, and Prophet, comparing them 
-    on a 30-day chronological split, recommendation is saved in registry.
+    Trains Linear Regression, Ridge Regression, Random Forest, and Prophet.
     """
     if not os.path.exists(ACTIVE_DATASET_PATH):
         raise HTTPException(status_code=404, detail="No active dataset found. Please upload or load demo data first.")
         
     try:
         df_raw = pd.read_csv(ACTIVE_DATASET_PATH)
-        report = run_training_pipeline(df_raw)
+        report = run_training_pipeline(df_raw, smooth_outliers_flag=smooth_outliers)
         return {
             "message": "Models trained successfully.",
             "report": report
