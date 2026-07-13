@@ -385,6 +385,9 @@ def build_features(df_product: pd.DataFrame) -> pd.DataFrame:
     df_feat['units_sold_lag_7']  = df_feat.groupby('product_id')['units_sold'].shift(7)
     df_feat['units_sold_lag_14'] = df_feat.groupby('product_id')['units_sold'].shift(14)
 
+    # Promotion lag feature - captures the post-promotion hangover effect
+    df_feat['promo_lag_1'] = df_feat.groupby('product_id')['promotion_flag'].shift(1)
+
     # Rolling averages — shift(1) applied inside transform to prevent target leakage
     df_feat['units_sold_roll_mean_7'] = df_feat.groupby('product_id')['units_sold'].transform(
         lambda x: x.shift(1).rolling(window=7, min_periods=1).mean()
@@ -396,7 +399,7 @@ def build_features(df_product: pd.DataFrame) -> pd.DataFrame:
     # Fill any remaining NaNs at the start of each product's history
     features_to_fill = [
         'units_sold_lag_1', 'units_sold_lag_7', 'units_sold_lag_14',
-        'units_sold_roll_mean_7', 'units_sold_roll_mean_30'
+        'units_sold_roll_mean_7', 'units_sold_roll_mean_30', 'promo_lag_1'
     ]
     for col in features_to_fill:
         df_feat[col] = df_feat.groupby('product_id')[col].transform(

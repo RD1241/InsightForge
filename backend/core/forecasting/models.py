@@ -1,8 +1,10 @@
 import os
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Graceful import of Prophet
@@ -53,7 +55,7 @@ class BaseForecaster:
     def fit(self, train_df: pd.DataFrame):
         pass
         
-    def predict(self, df: pd.DataFrame) -> dict:
+    def predict(self, df: pd.DataFrame, step: int = 1) -> dict:
         """
         Returns a dictionary:
         {
@@ -72,7 +74,7 @@ class LinearRegressionModel(BaseForecaster):
         self.feature_cols = [
             'price', 'promotion_flag', 'day_of_week', 'month', 'is_weekend', 'day_of_year',
             'units_sold_lag_1', 'units_sold_lag_7', 'units_sold_lag_14',
-            'units_sold_roll_mean_7', 'units_sold_roll_mean_30'
+            'units_sold_roll_mean_7', 'units_sold_roll_mean_30', 'promo_lag_1'
         ]
         
     def fit(self, train_df: pd.DataFrame):
@@ -85,14 +87,56 @@ class LinearRegressionModel(BaseForecaster):
         residuals = y - preds_train
         self.residual_std = float(np.std(residuals))
         
-    def predict(self, df: pd.DataFrame) -> dict:
+    def predict(self, df: pd.DataFrame, step: int = 1) -> dict:
         X = df[self.feature_cols]
         preds = self.model.predict(X)
         preds = np.maximum(0, preds)
         
-        # Calculate 95% prediction interval (1.96 * std)
-        lower_bound = np.maximum(0, preds - 1.96 * self.residual_std)
-        upper_bound = preds + 1.96 * self.residual_std
+        # Calculate step-dependent confidence interval: uncertainty grows over time
+        step_factor = np.sqrt(step)
+        lower_bound = np.maximum(0, preds - 1.96 * self.residual_std * step_factor)
+        upper_bound = preds + 1.96 * self.residual_std * step_factor
+        
+        return {
+            "predictions": np.round(preds, 2),
+            "lower_bound": np.round(lower_bound, 2),
+            "upper_bound": np.round(upper_bound, 2)
+        }
+
+class RidgeRegressionModel(BaseForecaster):
+    def __init__(self):
+        super().__init__()
+        self.model_name = "Ridge Regression"
+        # Standardizing features is essential for L2 regularization
+        self.model = Pipeline([
+            ('scaler', StandardScaler()),
+            ('ridge', Ridge(alpha=1.0, random_state=42))
+        ])
+        self.feature_cols = [
+            'price', 'promotion_flag', 'day_of_week', 'month', 'is_weekend', 'day_of_year',
+            'units_sold_lag_1', 'units_sold_lag_7', 'units_sold_lag_14',
+            'units_sold_roll_mean_7', 'units_sold_roll_mean_30', 'promo_lag_1'
+        ]
+        
+    def fit(self, train_df: pd.DataFrame):
+        X = train_df[self.feature_cols]
+        y = train_df['units_sold']
+        self.model.fit(X, y)
+        
+        # Calculate standard deviation of residuals for confidence intervals
+        preds_train = self.model.predict(X)
+        residuals = y - preds_train
+        self.residual_std = float(np.std(residuals))
+        
+    def predict(self, df: pd.DataFrame, step: int = 1) -> dict:
+        X = df[self.feature_cols]
+        preds = self.model.predict(X)
+        preds = np.maximum(0, preds)
+        
+        # Calculate step-dependent confidence interval: uncertainty grows over time
+        step_factor = np.sqrt(step)
+        lower_bound = np.maximum(0, preds - 1.96 * self.residual_std * step_factor)
+        upper_bound = preds + 1.96 * self.residual_std * step_factor
         
         return {
             "predictions": np.round(preds, 2),
@@ -108,7 +152,7 @@ class RandomForestModel(BaseForecaster):
         self.feature_cols = [
             'price', 'promotion_flag', 'day_of_week', 'month', 'is_weekend', 'day_of_year',
             'units_sold_lag_1', 'units_sold_lag_7', 'units_sold_lag_14',
-            'units_sold_roll_mean_7', 'units_sold_roll_mean_30'
+            'units_sold_roll_mean_7', 'units_sold_roll_mean_30', 'promo_lag_1'
         ]
         
     def fit(self, train_df: pd.DataFrame):
@@ -121,13 +165,15 @@ class RandomForestModel(BaseForecaster):
         residuals = y - preds_train
         self.residual_std = float(np.std(residuals))
         
-    def predict(self, df: pd.DataFrame) -> dict:
+    def predict(self, df: pd.DataFrame, step: int = 1) -> dict:
         X = df[self.feature_cols]
         preds = self.model.predict(X)
         preds = np.maximum(0, preds)
         
-        lower_bound = np.maximum(0, preds - 1.96 * self.residual_std)
-        upper_bound = preds + 1.96 * self.residual_std
+        # Calculate step-dependent confidence interval: uncertainty grows over time
+        step_factor = np.sqrt(step)
+        lower_bound = np.maximum(0, preds - 1.96 * self.residual_std * step_factor)
+        upper_bound = preds + 1.96 * self.residual_std * step_factor
         
         return {
             "predictions": np.round(preds, 2),
@@ -160,7 +206,7 @@ class ProphetModel(BaseForecaster):
         
         self.model.fit(prophet_df)
         
-    def predict(self, df: pd.DataFrame) -> dict:
+    def predict(self, df: pd.DataFrame, step: int = 1) -> dict:
         if not self.model:
             raise ValueError("Prophet model must be fitted before predicting.")
             
