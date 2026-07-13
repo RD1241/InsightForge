@@ -20,9 +20,15 @@ async def chat_with_analyst(request: ChatRequest):
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
         
     try:
-        response_text = run_agent_query(request.message, request.session_id)
+        response_text = await run_agent_query(request.message, request.session_id)
         return {
             "response": response_text
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error in analyst conversation: {str(e)}")
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Error in analyst conversation: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail="An error occurred in the analyst conversation. Please try again."
+        )

@@ -71,7 +71,7 @@ def save_model(product_id: str, model_name: str, model_obj, metrics: dict):
             "model_name": model_name,
             "product_id": product_id,
             "metrics": metrics,
-            "model_path": file_path,
+            "model_path": filename,  # Relative filename only to support workspace portability
             "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
@@ -80,26 +80,48 @@ def save_model(product_id: str, model_name: str, model_obj, metrics: dict):
             
     return file_path
 
+_model_cache = {}
+
+def clear_model_cache():
+    """
+    Clears the in-memory models cache.
+    """
+    global _model_cache
+    _model_cache.clear()
+
 def load_model(product_id: str, model_name: str):
     """
     Loads a serialized model from the models_store directory.
+    Uses in-memory caching to avoid redundant disk reads and deserialization.
     """
-    if not os.path.exists(REGISTRY_JSON_PATH):
-        raise FileNotFoundError("Model registry not found. Train models first.")
+    global _model_cache
+    cache_key = (product_id, model_name)
+    if cache_key in _model_cache:
+        return _model_cache[cache_key]
         
-    with open(REGISTRY_JSON_PATH, "r") as f:
-        registry = json.load(f)
-        
+    with _registry_lock:
+        if not os.path.exists(REGISTRY_JSON_PATH):
+            raise FileNotFoundError("Model registry not found. Train models first.")
+            
+        with open(REGISTRY_JSON_PATH, "r") as f:
+            registry = json.load(f)
+            
     if product_id not in registry or model_name not in registry[product_id]:
         raise ValueError(f"Model '{model_name}' not found for product '{product_id}'.")
         
-    file_path = registry[product_id][model_name]["model_path"]
+    stored_path = registry[product_id][model_name]["model_path"]
+    if os.path.isabs(stored_path):
+        file_path = stored_path
+    else:
+        file_path = os.path.join(MODELS_STORE_DIR, stored_path)
+        
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Model binary file not found at: {file_path}")
         
     with open(file_path, "rb") as f:
         model_obj = pickle.load(f)
         
+    _model_cache[cache_key] = model_obj
     return model_obj
 
 def get_product_models(product_id: str) -> list:
@@ -110,12 +132,15 @@ def get_product_models(product_id: str) -> list:
         return []
         
     try:
-        with open(REGISTRY_JSON_PATH, "r") as f:
-            registry = json.load(f)
+        with _registry_lock:
+            with open(REGISTRY_JSON_PATH, "r") as f:
+                registry = json.load(f)
         if product_id in registry:
             return list(registry[product_id].values())
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Error reading model registry for product {product_id}: {str(e)}", exc_info=True)
     return []
 
 def get_best_model_metadata(product_id: str) -> dict:
@@ -154,5 +179,8 @@ def load_training_report() -> dict:
     try:
         with open(TRAINING_REPORT_PATH, "r") as f:
             return json.load(f)
-    except Exception:
+    except Exception as e:
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Failed to load training report: {str(e)}", exc_info=True)
         return None

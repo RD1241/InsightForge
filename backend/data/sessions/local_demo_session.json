@@ -1,0 +1,26 @@
+[
+    {
+        "role": "user",
+        "content": "Explain this sales trend chart for our store products."
+    },
+    {
+        "role": "assistant",
+        "content": "I apologize, but I could not contact the LLM completions service. Here is the raw data computed from our backend tools instead:\nNo data context available."
+    },
+    {
+        "role": "user",
+        "content": "Show top 5 products"
+    },
+    {
+        "role": "assistant",
+        "content": "I apologize, but I could not contact the LLM completions service. Here is the raw data computed from our backend tools instead:\nNo data context available."
+    },
+    {
+        "role": "user",
+        "content": "Show top 5 products"
+    },
+    {
+        "role": "assistant",
+        "content": "Based on the data, the top 5 selling products in our store are:\n\n1. **Organic Milk 1L** (PRD_01) from the Dairy category, with total sales of 100,034 units and total revenue of $344,747.31.\n2. **Whole Wheat Bread** (PRD_02) from the Bakery category, with total sales of 74,053 units and total revenue of $204,167.16.\n3. **Free Range Eggs 12pk** (PRD_03) from the Dairy category, with total sales of 53,283 units and total revenue of $261,794.71.\n4. **Fresh Fuji Apples 1kg** (PRD_04) from the Produce category, with total sales of 39,997 units and total revenue of $157,133.42.\n5. **Herbal Shampoo 400ml** (PRD_05) from the Personal Care category, with total sales of 13,571 units and total revenue of $113,583.69.\n\nThese products are the best-selling items in our store, with Organic Milk 1L being the clear leader in terms of both sales volume and revenue."
+    }
+]

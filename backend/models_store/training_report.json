@@ -1,0 +1,206 @@
+{
+    "timestamp": "2026-07-14 00:13:33",
+    "dataset_rows": 7300,
+    "total_products_trained": 5,
+    "average_mae": 4.5,
+    "average_mape": 6.43,
+    "products": {
+        "PRD_01": {
+            "product_id": "PRD_01",
+            "product_name": "Organic Milk 1L",
+            "category": "Dairy",
+            "best_model": "Prophet",
+            "best_metrics": {
+                "MAE": 6.71,
+                "RMSE": 8.61,
+                "MAPE": 5.48,
+                "R2": 0.92
+            },
+            "all_models": {
+                "Linear Regression": {
+                    "MAE": 29.93,
+                    "RMSE": 33.78,
+                    "MAPE": 22.1,
+                    "R2": -0.18
+                },
+                "Ridge Regression": {
+                    "MAE": 30.04,
+                    "RMSE": 33.85,
+                    "MAPE": 22.19,
+                    "R2": -0.19
+                },
+                "Random Forest": {
+                    "MAE": 8.48,
+                    "RMSE": 10.79,
+                    "MAPE": 6.36,
+                    "R2": 0.88
+                },
+                "Prophet": {
+                    "MAE": 6.71,
+                    "RMSE": 8.61,
+                    "MAPE": 5.48,
+                    "R2": 0.92
+                }
+            },
+            "training_time_seconds": 3.68
+        },
+        "PRD_02": {
+            "product_id": "PRD_02",
+            "product_name": "Whole Wheat Bread",
+            "category": "Bakery",
+            "best_model": "Prophet",
+            "best_metrics": {
+                "MAE": 6.26,
+                "RMSE": 8.47,
+                "MAPE": 7.32,
+                "R2": 0.85
+            },
+            "all_models": {
+                "Linear Regression": {
+                    "MAE": 15.74,
+                    "RMSE": 18.52,
+                    "MAPE": 16.51,
+                    "R2": 0.26
+                },
+                "Ridge Regression": {
+                    "MAE": 15.74,
+                    "RMSE": 18.51,
+                    "MAPE": 16.49,
+                    "R2": 0.26
+                },
+                "Random Forest": {
+                    "MAE": 7.33,
+                    "RMSE": 8.93,
+                    "MAPE": 8.26,
+                    "R2": 0.83
+                },
+                "Prophet": {
+                    "MAE": 6.26,
+                    "RMSE": 8.47,
+                    "MAPE": 7.32,
+                    "R2": 0.85
+                }
+            },
+            "training_time_seconds": 3.63
+        },
+        "PRD_03": {
+            "product_id": "PRD_03",
+            "product_name": "Free Range Eggs 12pk",
+            "category": "Dairy",
+            "best_model": "Prophet",
+            "best_metrics": {
+                "MAE": 3.79,
+                "RMSE": 4.86,
+                "MAPE": 5.26,
+                "R2": 0.94
+            },
+            "all_models": {
+                "Linear Regression": {
+                    "MAE": 13.57,
+                    "RMSE": 15.67,
+                    "MAPE": 16.59,
+                    "R2": 0.35
+                },
+                "Ridge Regression": {
+                    "MAE": 14.04,
+                    "RMSE": 16.67,
+                    "MAPE": 16.64,
+                    "R2": 0.26
+                },
+                "Random Forest": {
+                    "MAE": 7.84,
+                    "RMSE": 9.73,
+                    "MAPE": 9.7,
+                    "R2": 0.75
+                },
+                "Prophet": {
+                    "MAE": 3.79,
+                    "RMSE": 4.86,
+                    "MAPE": 5.26,
+                    "R2": 0.94
+                }
+            },
+            "training_time_seconds": 3.55
+        },
+        "PRD_04": {
+            "product_id": "PRD_04",
+            "product_name": "Fresh Fuji Apples 1kg",
+            "category": "Produce",
+            "best_model": "Random Forest",
+            "best_metrics": {
+                "MAE": 4.5,
+                "RMSE": 5.6,
+                "MAPE": 6.63,
+                "R2": 0.87
+            },
+            "all_models": {
+                "Linear Regression": {
+                    "MAE": 7.28,
+                    "RMSE": 8.78,
+                    "MAPE": 12.69,
+                    "R2": 0.68
+                },
+                "Ridge Regression": {
+                    "MAE": 7.3,
+                    "RMSE": 8.79,
+                    "MAPE": 12.71,
+                    "R2": 0.68
+                },
+                "Random Forest": {
+                    "MAE": 4.5,
+                    "RMSE": 5.6,
+                    "MAPE": 6.63,
+                    "R2": 0.87
+                },
+                "Prophet": {
+                    "MAE": 4.92,
+                    "RMSE": 5.94,
+                    "MAPE": 7.84,
+                    "R2": 0.85
+                }
+            },
+            "training_time_seconds": 3.63
+        },
+        "PRD_05": {
+            "product_id": "PRD_05",
+            "product_name": "Herbal Shampoo 400ml",
+            "category": "Personal Care",
+            "best_model": "Prophet",
+            "best_metrics": {
+                "MAE": 1.23,
+                "RMSE": 1.5,
+                "MAPE": 7.48,
+                "R2": 0.92
+            },
+            "all_models": {
+                "Linear Regression": {
+                    "MAE": 2.26,
+                    "RMSE": 2.69,
+                    "MAPE": 14.93,
+                    "R2": 0.73
+                },
+                "Ridge Regression": {
+                    "MAE": 2.34,
+                    "RMSE": 2.73,
+                    "MAPE": 15.15,
+                    "R2": 0.72
+                },
+                "Random Forest": {
+                    "MAE": 1.88,
+                    "RMSE": 2.18,
+                    "MAPE": 10.7,
+                    "R2": 0.82
+                },
+                "Prophet": {
+                    "MAE": 1.23,
+                    "RMSE": 1.5,
+                    "MAPE": 7.48,
+                    "R2": 0.92
+                }
+            },
+            "training_time_seconds": 1.45
+        }
+    },
+    "total_training_time_seconds": 5.15,
+    "prophet_available": true
+}

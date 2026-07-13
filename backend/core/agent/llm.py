@@ -33,8 +33,10 @@ def get_session_history(session_id: str) -> list:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("insightforge")
+            logger.error(f"Failed to load chat session history for {session_id}: {str(e)}", exc_info=True)
     return []
 
 def add_message_to_history(session_id: str, role: str, content: str):
@@ -53,9 +55,11 @@ def add_message_to_history(session_id: str, role: str, content: str):
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=4)
     except Exception as e:
-        print(f"Failed to save chat session history: {str(e)}")
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Failed to save chat session history for {session_id}: {str(e)}", exc_info=True)
 
-def call_llm(messages: list, require_json: bool = False) -> str:
+async def call_llm(messages: list, require_json: bool = False) -> str:
     """
     Unified client that routes Chat Completions to either Groq or Ollama.
     """
@@ -89,9 +93,9 @@ def call_llm(messages: list, require_json: bool = False) -> str:
         payload["response_format"] = {"type": "json_object"}
         
     try:
-        # Send synchronous POST request using httpx
-        with httpx.Client(timeout=30.0) as client:
-            response = client.post(url, headers=headers, json=payload)
+        # Send asynchronous POST request using httpx
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
             
             if response.status_code != 200:
                 raise ValueError(

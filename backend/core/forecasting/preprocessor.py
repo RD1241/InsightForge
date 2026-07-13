@@ -116,9 +116,9 @@ def standardize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if 'store_id' in df_std.columns:
         df_std['store_id'] = df_std['store_id'].astype(str)
         
-    # Convert units_sold to numeric
+    # Convert units_sold to numeric and handle missing cells safely (HIGH-02)
     if 'units_sold' in df_std.columns:
-        df_std['units_sold'] = pd.to_numeric(df_std['units_sold'], errors='coerce')
+        df_std['units_sold'] = pd.to_numeric(df_std['units_sold'], errors='coerce').fillna(0.0)
         
     # 2. Enrich Missing Columns from Catalog
     unique_products = df_std['product_id'].unique() if 'product_id' in df_std.columns else []
@@ -236,7 +236,10 @@ def validate_dataset(df: pd.DataFrame) -> dict:
     report["stats"]["row_count"] = len(df_mapped)
     report["stats"]["unique_stores"] = int(df_mapped['store_id'].nunique())
     report["stats"]["unique_products"] = int(df_mapped['product_id'].nunique())
-    report["stats"]["unique_categories"] = int(df_mapped['category'].nunique())
+    if 'category' in df_mapped.columns:
+        report["stats"]["unique_categories"] = int(df_mapped['category'].nunique())
+    else:
+        report["stats"]["unique_categories"] = 0
     
     # 3. Date Parsing & Range
     try:
@@ -435,7 +438,7 @@ def build_features(df_product: pd.DataFrame) -> pd.DataFrame:
     ]
     for col in features_to_fill:
         df_feat[col] = df_feat.groupby('product_id')[col].transform(
-            lambda x: x.bfill().ffill().fillna(0.0)
+            lambda x: x.ffill().fillna(0.0)
         )
 
     return df_feat

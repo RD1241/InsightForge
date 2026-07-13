@@ -1028,7 +1028,7 @@ a {
     }
     
     /* Hide everything on screen except print template */
-    .sidebar, .main-layout, .chat-panel, .modal-backdrop {
+    .sidebar, .main-layout, .chat-panel, .learning-panel, .modal-backdrop {
         display: none !important;
     }
     
@@ -1207,5 +1207,248 @@ a {
     flex-direction: column;
     align-items: center;
     gap: 0.75rem;
+}
+
+/* Learning Center Slide-out Panel */
+.learning-panel {
+    position: absolute;
+    top: 0;
+    right: calc(-1 * var(--chat-width)); /* Start offscreen */
+    width: var(--chat-width);
+    height: 100%;
+    background-color: rgba(15, 23, 42, 0.98);
+    backdrop-filter: blur(20px);
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    z-index: 50;
+    transition: right var(--transition-speed) cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4);
+}
+
+.learning-panel.open {
+    right: 0;
+}
+
+.learning-panel-header {
+    height: var(--header-height);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.25rem;
+}
+
+.learning-header-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.learning-header-title h3 {
+    font-size: 0.95rem;
+    line-height: 1.2;
+}
+
+.learning-header-title span {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.learning-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem;
+}
+
+.learning-close-btn:hover {
+    color: var(--text-primary);
+}
+
+/* Tabs inside Learning Panel */
+.learning-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    background-color: rgba(30, 41, 59, 0.3);
+}
+
+.learning-tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.85rem 0;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+    border-bottom: 2px solid transparent;
+}
+
+.learning-tab-btn:hover {
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.learning-tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background-color: rgba(99, 102, 241, 0.05);
+}
+
+.learning-tab-btn .tab-icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* Learning Content Elements */
+.learning-content-container {
+    flex-grow: 1;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    overflow-y: auto;
+}
+
+.learning-card {
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    transition: all var(--transition-speed) ease;
+}
+
+.learning-card:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    background-color: rgba(30, 41, 59, 0.5);
+}
+
+.learning-card.highlighted {
+    border-color: var(--accent);
+    background-color: rgba(99, 102, 241, 0.08);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.15);
+    animation: highlightPulse 2s ease-in-out;
+}
+
+@keyframes highlightPulse {
+    0% { border-color: var(--accent); box-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
+    50% { border-color: rgba(99, 102, 241, 0.5); box-shadow: 0 0 5px rgba(99, 102, 241, 0.05); }
+    100% { border-color: var(--accent); box-shadow: 0 0 15px rgba(99, 102, 241, 0.15); }
+}
+
+.learning-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 0.5rem;
+}
+
+.learning-card-body {
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.learning-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Metric rating badge styling */
+.rating-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.rating-excellent { background-color: rgba(16, 185, 129, 0.15); color: var(--success); }
+.rating-good { background-color: rgba(245, 158, 11, 0.15); color: var(--warning); }
+.rating-poor { background-color: rgba(239, 68, 68, 0.15); color: var(--error); }
+
+/* Accordion for Glossary */
+.glossary-card {
+    cursor: pointer;
+}
+
+.glossary-card .learning-card-header {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.glossary-card.open .learning-card-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 0.5rem;
+}
+
+.glossary-details {
+    display: none;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.glossary-card.open .glossary-details {
+    display: flex;
+}
+
+.metric-math {
+    background-color: rgba(15, 23, 42, 0.6);
+    border-radius: 6px;
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+    text-align: center;
+    font-size: 0.85rem;
+    overflow-x: auto;
+}
+
+/* Ask AI Analyst Button */
+.ask-ai-center-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    border: none;
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+    align-self: flex-start;
+    margin-top: 0.5rem;
+}
+
+.ask-ai-center-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* Extra small buttons for scenario presets */
+.btn-xs {
+    padding: 3px 8px;
+    font-size: 0.68rem;
+    border-radius: 4px;
 }
 

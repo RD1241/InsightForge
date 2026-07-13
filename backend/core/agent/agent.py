@@ -72,7 +72,7 @@ def resolve_product_id(input_str: str) -> str:
         
     return input_str
 
-def run_agent_query(user_message: str, session_id: str) -> str:
+async def run_agent_query(user_message: str, session_id: str) -> str:
     """
     Executes the AI Analyst workflow:
     1. Classifies user query into tool selection + arguments.
@@ -120,7 +120,7 @@ OR
     ]
     
     try:
-        raw_classification = call_llm(classification_messages, require_json=True)
+        raw_classification = await call_llm(classification_messages, require_json=True)
         # Parse JSON
         classification = json.loads(raw_classification)
         tool_name = classification.get("tool_name", "none")
@@ -161,6 +161,11 @@ OR
                     tool_output = tools.explain_forecast_decomposition(product_id=pid)
             elif tool_name == "generate_business_insights":
                 tool_output = tools.generate_business_insights()
+            else:
+                tool_output = {
+                    "status": "error",
+                    "message": f"Tool '{tool_name}' is not supported by the backend."
+                }
         except Exception as e:
             print(f"Tool execution failed: {str(e)}")
             tool_output = {"status": "error", "message": f"Failed to execute tool {tool_name}: {str(e)}"}
@@ -203,7 +208,7 @@ RULES:
     
     # Call final summarization
     try:
-        final_response = call_llm(final_messages)
+        final_response = await call_llm(final_messages)
     except Exception as e:
         final_response = (
             f"I apologize, but I could not contact the LLM completions service. "

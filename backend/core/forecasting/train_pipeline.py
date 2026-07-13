@@ -129,6 +129,13 @@ def _train_single_product(pid: str, df_features: pd.DataFrame, prophet_available
     models_trained["Random Forest"] = rf_metrics
 
     # --- Model 4: Prophet (if available) ---
+    # NOTE ON EVALUATION METHODOLOGY (CRIT-02):
+    # Prophet operates as an additive regression model fitting trend and seasonal Fourier series using
+    # the datetime ds field directly. Unlike recursive autoregressive ML models (Linear/Ridge Regression,
+    # Random Forest) which rely on lag features constructed step-by-step from predictions during validation,
+    # Prophet does not use lagged features. Thus, Prophet is evaluated by invoking its native
+    # prophet_model.predict(test_df) API directly on the test dates, rather than inside the recursive validation
+    # loop. This methodological difference is mathematically sound and matches how each model serves in production.
     if prophet_available:
         try:
             prophet_model = ProphetModel()
@@ -215,11 +222,12 @@ def run_training_pipeline(df_raw: pd.DataFrame, smooth_outliers_flag: bool = Tru
     save_training_report(report)
     return report
 
-def generate_future_forecast(df_raw: pd.DataFrame, product_id: str, model_name: str = None, horizon_days: int = 30) -> dict:
+def generate_future_forecast(df_raw: pd.DataFrame, product_id: str, model_name: str = None, horizon_days: int = 30, price_multiplier: float = 1.0, promo_days: str = "") -> dict:
     """
     Generates N-days out-of-sample future forecasts for a product.
     If model_name is None, loads the recommended best model from the registry.
     Uses recursive lag updating and step-dependent confidence cones for ML models.
+    Supports What-If scenario overrides (price multiplier and promotion days) and clamps predictions to 0.
     """
     df_clean = clean_dataset(df_raw)
     
@@ -246,9 +254,18 @@ def generate_future_forecast(df_raw: pd.DataFrame, product_id: str, model_name: 
     # We need the last 30 days of actuals to initialize the lags and rolling averages
     history_subset = prod_df.sort_values(by='date').tail(30).copy()
     
-    # Keep track of baseline price and promotion for the future (default: last price, no promo)
-    avg_price = float(history_subset['price'].mean())
+    # Constrain price multiplier to conservative bounds [0.7, 1.3] to prevent extreme extrapolations
+    price_multiplier = max(0.7, min(1.3, price_multiplier))
+    avg_price = float(history_subset['price'].mean()) * price_multiplier
     
+    # Parse overridden promotion days
+    promo_indices = set()
+    if promo_days:
+        try:
+            promo_indices = {int(x) for x in promo_days.split(",") if x.strip()}
+        except ValueError:
+            pass
+
     # Generate future dates
     future_dates = [last_historic_date + timedelta(days=i) for i in range(1, horizon_days + 1)]
     
@@ -258,23 +275,27 @@ def generate_future_forecast(df_raw: pd.DataFrame, product_id: str, model_name: 
     
     if model_name == "Prophet":
         # Prophet handles future projections directly
+        # Map promotion overrides to future_df
+        future_promos_vector = [1 if i in promo_indices else 0 for i in range(1, horizon_days + 1)]
         future_df = pd.DataFrame({
             "date": future_dates,
             "price": avg_price,
-            "promotion_flag": 0
+            "promotion_flag": future_promos_vector
         })
         res = model.predict(future_df)
-        predictions = res["predictions"].tolist()
-        lower_bounds = res["lower_bound"].tolist()
-        upper_bounds = res["upper_bound"].tolist()
+        predictions = [max(0.0, float(p)) for p in res["predictions"].tolist()] # Clamp to 0
+        lower_bounds = [max(0.0, float(l)) for l in res["lower_bound"].tolist()]
+        upper_bounds = [max(0.0, float(u)) for u in res["upper_bound"].tolist()]
         
     else:
         # ML models require recursive forecasting!
         sales_buffer = history_subset['units_sold'].tolist()
         
-        # Seed promotion lag buffer
+        # Seed promotion lag buffer using overrides
+        # future_promos has size horizon_days + 2 to support promo_lag_1 feature indexing
+        future_promos_vector = [1 if i in promo_indices else 0 for i in range(1, horizon_days + 1)]
         last_historic_promo = history_subset['promotion_flag'].iloc[-1]
-        future_promos = [last_historic_promo] + [0] * horizon_days
+        future_promos = [last_historic_promo] + future_promos_vector
         
         # Performance optimization: pre-allocate DataFrame to avoid re-creation overhead in the loop
         feat_row = pd.DataFrame(np.zeros((1, len(model.feature_cols))), columns=model.feature_cols)
@@ -286,10 +307,10 @@ def generate_future_forecast(df_raw: pd.DataFrame, product_id: str, model_name: 
             is_weekend = 1 if day_of_week in [5, 6] else 0
             day_of_year = fut_date.timetuple().tm_yday
             
-            # Lags (offset from the end of the buffer)
-            lag_1 = sales_buffer[-1]
-            lag_7 = sales_buffer[-7]
-            lag_14 = sales_buffer[-14]
+            # Lags (offset from the end of the buffer) (CRIT-05 length guards)
+            lag_1 = sales_buffer[-1] if len(sales_buffer) >= 1 else 0.0
+            lag_7 = sales_buffer[-7] if len(sales_buffer) >= 7 else (sales_buffer[0] if len(sales_buffer) >= 1 else 0.0)
+            lag_14 = sales_buffer[-14] if len(sales_buffer) >= 14 else (sales_buffer[0] if len(sales_buffer) >= 1 else 0.0)
             
             # Rolling averages
             roll_7 = np.mean(sales_buffer[-7:])
@@ -297,7 +318,8 @@ def generate_future_forecast(df_raw: pd.DataFrame, product_id: str, model_name: 
             promo_lag = future_promos[step - 1]
             
             # Update pre-allocated DataFrame in-place
-            feat_row.at[0, 'promotion_flag'] = 0
+            current_promo = future_promos[step]
+            feat_row.at[0, 'promotion_flag'] = current_promo
             feat_row.at[0, 'day_of_week'] = day_of_week
             feat_row.at[0, 'month'] = month
             feat_row.at[0, 'is_weekend'] = is_weekend
@@ -314,6 +336,11 @@ def generate_future_forecast(df_raw: pd.DataFrame, product_id: str, model_name: 
             pred_val = float(pred_res["predictions"][0])
             lower_val = float(pred_res["lower_bound"][0])
             upper_val = float(pred_res["upper_bound"][0])
+            
+            # Clamp intermediate predictions to zero
+            pred_val = max(0.0, pred_val)
+            lower_val = max(0.0, lower_val)
+            upper_val = max(0.0, upper_val)
             
             predictions.append(round(pred_val, 2))
             lower_bounds.append(round(lower_val, 2))
@@ -338,6 +365,57 @@ def generate_future_forecast(df_raw: pd.DataFrame, product_id: str, model_name: 
         if m["model_name"] == model_name:
             model_metrics = m["metrics"]
             
+    # --- Backend Decision Support Calculations ---
+    current_stock = int(history_subset['stock_on_hand'].iloc[-1])
+    avg_daily_sales = float(history_subset['units_sold'].mean())
+    if avg_daily_sales <= 0:
+        avg_daily_sales = 1.0 # fallback
+        
+    safety_stock_threshold = 2.0 * avg_daily_sales
+    target_stock_threshold = 7.0 * avg_daily_sales
+    
+    projected_stock = []
+    stock_level = float(current_stock)
+    stockout_days = 0
+    lost_sales_units = 0.0
+    reorder_date = None
+    recommended_qty = 0
+    
+    for step, pred_val in enumerate(predictions):
+        stock_level -= pred_val
+        if stock_level < 0:
+            stockout_days += 1
+            lost_sales_units += abs(stock_level)
+            stock_level = 0.0
+        projected_stock.append(round(stock_level, 2))
+        
+        if stock_level < safety_stock_threshold and reorder_date is None:
+            reorder_date = future_dates[step].strftime("%Y-%m-%d")
+            recommended_qty = max(0, int(round(target_stock_threshold - stock_level)))
+            
+    revenue_at_risk = round(lost_sales_units * avg_price, 2)
+    
+    if current_stock == 0:
+        status = "OUT_OF_STOCK"
+    elif current_stock < safety_stock_threshold:
+        status = "CRITICAL_LOW"
+    elif current_stock < 5.0 * avg_daily_sales:
+        status = "LOW_STOCK"
+    else:
+        status = "HEALTHY"
+        
+    decision_support = {
+        "current_stock": current_stock,
+        "avg_daily_sales": round(avg_daily_sales, 2),
+        "safety_stock_threshold": round(safety_stock_threshold, 2),
+        "status": status,
+        "reorder_date": reorder_date,
+        "recommended_reorder_qty": recommended_qty,
+        "stockout_days_projected": stockout_days,
+        "revenue_at_risk": revenue_at_risk,
+        "projected_stock": projected_stock
+    }
+            
     return {
         "product_id": product_id,
         "product_name": history_subset['product_name'].iloc[0],
@@ -346,6 +424,8 @@ def generate_future_forecast(df_raw: pd.DataFrame, product_id: str, model_name: 
         "metrics": model_metrics,
         "recommendation_reason": best_meta.get("recommendation_reason", "") if model_name == best_meta["model_name"] else "",
         "forecast_horizon_days": horizon_days,
+        "price_multiplier_applied": price_multiplier,
+        "simulated_price": round(avg_price, 2),
         "history": {
             "dates": history_dates,
             "sales": history_sales
@@ -355,5 +435,6 @@ def generate_future_forecast(df_raw: pd.DataFrame, product_id: str, model_name: 
             "predictions": predictions,
             "lower_bound": lower_bounds,
             "upper_bound": upper_bounds
-        }
+        },
+        "decision_support": decision_support
     }

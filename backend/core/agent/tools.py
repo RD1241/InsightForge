@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from core.forecasting.preprocessor import clean_dataset, aggregate_to_product_level
 from core.forecasting.registry import get_best_model_metadata, get_product_models, load_model, load_training_report
 from core.forecasting.train_pipeline import generate_future_forecast
+from routers.dataset import get_clean_df
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ACTIVE_DATASET_PATH = os.path.join(BASE_DIR, "data", "active_dataset.csv")
@@ -15,10 +16,7 @@ def get_loaded_df():
     """
     Helper to load and clean the active dataset.
     """
-    if not os.path.exists(ACTIVE_DATASET_PATH):
-        raise FileNotFoundError("No active dataset loaded. Please upload a dataset or load the demo first.")
-    df = pd.read_csv(ACTIVE_DATASET_PATH)
-    return clean_dataset(df)
+    return get_clean_df()
 
 # --- Core Analyst Tools ---
 

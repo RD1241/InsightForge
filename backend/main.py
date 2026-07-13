@@ -28,7 +28,7 @@ app.include_router(agent.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins for local ease of use
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

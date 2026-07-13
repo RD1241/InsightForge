@@ -1,11 +1,13 @@
 import os
 import pandas as pd
+import asyncio
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 # Standardize path imports
 from core.forecasting.train_pipeline import run_training_pipeline, generate_future_forecast
-from core.forecasting.registry import get_product_models, load_training_report
+from core.forecasting.registry import get_product_models, load_training_report, clear_model_cache
+from routers.dataset import get_active_df
 
 router = APIRouter(prefix="/api/forecast", tags=["Forecasting"])
 
@@ -23,14 +25,21 @@ async def train_models(smooth_outliers: bool = Query(True, description="Enable r
         raise HTTPException(status_code=404, detail="No active dataset found. Please upload or load demo data first.")
         
     try:
-        df_raw = pd.read_csv(ACTIVE_DATASET_PATH)
-        report = run_training_pipeline(df_raw, smooth_outliers_flag=smooth_outliers)
+        import asyncio
+        df_raw = get_active_df()
+        loop = asyncio.get_event_loop()
+        # Offload heavy synchronous training to thread pool executor (CRIT-03)
+        report = await loop.run_in_executor(None, run_training_pipeline, df_raw, smooth_outliers)
+        clear_model_cache() # Invalidate cache on new training run (HIGH-11)
         return {
             "message": "Models trained successfully.",
             "report": report
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed during training run: {str(e)}")
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Failed during training run: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed during training run. Please check server logs.")
 
 @router.get("/report")
 async def get_training_report():
@@ -50,23 +59,33 @@ async def get_training_report():
 async def predict_demand(
     product_id: str = Query(..., description="ID of the product to forecast"),
     model_name: str = Query(None, description="Specific model to use (defaults to recommended)"),
-    horizon_days: int = Query(30, ge=7, le=90, description="Forecast horizon in days (7 to 90)")
+    horizon_days: int = Query(30, ge=7, le=90, description="Forecast horizon in days (7 to 90)"),
+    price_multiplier: float = Query(1.0, ge=0.7, le=1.3, description="What-if price modifier"),
+    promo_days: str = Query("", description="Comma-separated future promotion day offsets")
 ):
     """
     Generates N-day future predictions for a product, showing actual historic sales
     alongside predictions and 95% confidence intervals.
+    Supports price and promotion What-If scenarios.
     """
     if not os.path.exists(ACTIVE_DATASET_PATH):
         raise HTTPException(status_code=404, detail="No active dataset found. Load data first.")
         
     try:
-        df_raw = pd.read_csv(ACTIVE_DATASET_PATH)
-        forecast_res = generate_future_forecast(df_raw, product_id, model_name, horizon_days)
+        def _blocking_forecast():
+            df_raw = get_active_df()
+            return generate_future_forecast(
+                df_raw, product_id, model_name, horizon_days, price_multiplier, promo_days
+            )
+        forecast_res = await asyncio.to_thread(_blocking_forecast)
         return forecast_res
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate forecast: {str(e)}")
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Failed to generate forecast: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate forecast. Please try again.")
 
 @router.get("/compare")
 async def get_models_comparison(product_id: str = Query(..., description="ID of the product to compare models for")):

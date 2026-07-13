@@ -22,13 +22,39 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 # In-memory status cache to avoid loading large CSVs repeatedly on status checks
 _cached_status = None
+_cached_df = None
+
+def get_active_df() -> pd.DataFrame:
+    """
+    Returns the active dataset in-memory cache, loading it from disk if not cached.
+    """
+    global _cached_df
+    if _cached_df is None:
+        if not os.path.exists(ACTIVE_DATASET_PATH):
+            raise FileNotFoundError("No active dataset found.")
+        _cached_df = pd.read_csv(ACTIVE_DATASET_PATH)
+    return _cached_df
+
+_cached_clean_df = None
+
+def get_clean_df() -> pd.DataFrame:
+    """
+    Returns the cleaned active dataset in-memory cache, cleaning it if not cached.
+    """
+    global _cached_clean_df
+    if _cached_clean_df is None:
+        raw_df = get_active_df()
+        _cached_clean_df = clean_dataset(raw_df)
+    return _cached_clean_df
 
 def clear_status_cache():
     """
     Clears the internal cache when a new dataset is active.
     """
-    global _cached_status
+    global _cached_status, _cached_df, _cached_clean_df
     _cached_status = None
+    _cached_df = None
+    _cached_clean_df = None
 
 @router.post("/upload")
 async def upload_dataset(file: UploadFile = File(...)):
@@ -37,6 +63,8 @@ async def upload_dataset(file: UploadFile = File(...)):
     if valid, saves it as the active dataset.
     """
     global _cached_status
+    clear_status_cache()  # Clear cache on new upload (HIGH-11)
+    
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported.")
         
@@ -49,8 +77,11 @@ async def upload_dataset(file: UploadFile = File(...)):
             detail="File size exceeds the 50 MB limit. Please upload a smaller CSV."
         )
     await file.seek(0)
-        
-    temp_path = os.path.join(DATA_DIR, f"temp_{file.filename}")
+    
+    # Sanitize filename to prevent path traversal (HIGH-02)
+    from pathlib import Path
+    safe_filename = Path(file.filename).name
+    temp_path = os.path.join(DATA_DIR, f"temp_{safe_filename}")
     try:
         # Save upload to a temporary file first
         with open(temp_path, "wb") as buffer:
@@ -100,13 +131,16 @@ async def upload_dataset(file: UploadFile = File(...)):
         # Cleanup temp file on error
         if os.path.exists(temp_path):
             os.remove(temp_path)
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Dataset upload failed due to file parsing error: {str(e)}", exc_info=True)
         return JSONResponse(
             status_code=422,
             content={
                 "message": "Dataset validation failed due to file parsing error.",
                 "report": {
                     "is_valid": False,
-                    "errors": [f"Failed to read CSV: {str(e)}"],
+                    "errors": ["Failed to read CSV file. Please make sure it is a valid CSV format."],
                     "warnings": [],
                     "stats": {}
                 }
@@ -120,6 +154,7 @@ async def load_demo_dataset():
     Generates it if it doesn't exist.
     """
     global _cached_status
+    clear_status_cache()  # Clear cache on demo load (HIGH-11)
     try:
         # Check if demo data exists, generate if missing
         if not os.path.exists(DEMO_DATASET_PATH):
@@ -129,7 +164,7 @@ async def load_demo_dataset():
         shutil.copyfile(DEMO_DATASET_PATH, ACTIVE_DATASET_PATH)
         
         # Load to read metadata
-        df = pd.read_csv(ACTIVE_DATASET_PATH)
+        df = get_active_df()
         report = validate_dataset(df)
         
         # Cache the status
@@ -148,12 +183,15 @@ async def load_demo_dataset():
         }
         
         return {
-            "message": "Demo retail dataset loaded successfully.",
+            "message": "Demo dataset loaded successfully.",
             "report": report
         }
     except Exception as e:
         clear_status_cache()
-        raise HTTPException(status_code=500, detail=f"Failed to load demo dataset: {str(e)}")
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Failed to load demo dataset: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load demo dataset. Please try again.")
 
 @router.get("/status")
 async def get_dataset_status():
@@ -175,7 +213,7 @@ async def get_dataset_status():
         
     try:
         # Read dataset head and stats if cache is empty
-        df = pd.read_csv(ACTIVE_DATASET_PATH)
+        df = get_active_df()
         report = validate_dataset(df)
         
         # Get a programmatic P0 Dataset Intelligence summary
@@ -196,7 +234,10 @@ async def get_dataset_status():
         return _cached_status
     except Exception as e:
         clear_status_cache()
-        raise HTTPException(status_code=500, detail=f"Error reading dataset status: {str(e)}")
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Error reading dataset status: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error reading dataset status. Please try again.")
 
 @router.get("/preview")
 async def get_dataset_preview(rows: int = 50):
@@ -207,7 +248,8 @@ async def get_dataset_preview(rows: int = 50):
         raise HTTPException(status_code=404, detail="No active dataset found.")
         
     try:
-        df = pd.read_csv(ACTIVE_DATASET_PATH, nrows=rows)
+        # Use cache for preview
+        df = get_active_df().head(rows)
         # Convert NaN values to None for clean JSON serialization
         df_clean = df.where(pd.notnull(df), None)
         return {
@@ -215,7 +257,10 @@ async def get_dataset_preview(rows: int = 50):
             "data": df_clean.to_dict(orient="records")
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate preview: {str(e)}")
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Failed to generate preview: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate preview. Please try again.")
 
 @router.get("/eda")
 async def get_eda_report():
@@ -227,9 +272,12 @@ async def get_eda_report():
         raise HTTPException(status_code=404, detail="No active dataset found.")
         
     try:
-        df = pd.read_csv(ACTIVE_DATASET_PATH)
+        df = get_active_df()
         df_clean = clean_dataset(df)
         eda_data = generate_eda_report(df_clean)
         return eda_data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate EDA report: {str(e)}")
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Failed to generate EDA report: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate EDA report. Please try again.")

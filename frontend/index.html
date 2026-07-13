@@ -12,6 +12,9 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <!-- KaTeX for math formulas -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <!-- CSS Stylesheet -->
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -310,9 +313,9 @@
                                     <label for="smooth-outliers-check" class="text-sm text-secondary cursor-pointer" style="cursor: pointer; user-select: none;">MAD Outlier Smoothing (Recommended)</label>
                                 </div>
                                 <div class="flex-row gap-2">
-                                    <button class="btn btn-secondary" id="open-viva-modal-btn">
-                                        <i data-lucide="help-circle"></i>
-                                        <span>Viva Guide</span>
+                                    <button class="btn btn-secondary" id="open-learning-btn">
+                                        <i data-lucide="book-open"></i>
+                                        <span>Learning Center</span>
                                     </button>
                                     <button class="btn btn-primary btn-large" id="train-models-btn">
                                         <i data-lucide="refresh-cw"></i>
@@ -398,6 +401,73 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- What-If Simulator Card -->
+                            <div class="card glassmorphic" id="whatif-simulator-card">
+                                <div class="card-header flex-row justify-between align-center">
+                                    <div class="flex-row align-center gap-2">
+                                        <i data-lucide="sliders" class="accent-color"></i>
+                                        <h3>Demand What-If Simulator</h3>
+                                    </div>
+                                    <span class="text-xs text-secondary italic" style="border: 1px solid var(--accent-light); padding: 2px 6px; border-radius: 4px;">Simulation Estimate</span>
+                                </div>
+                                <div class="card-body flex-col gap-4">
+                                    <!-- Presets row -->
+                                    <div class="flex-col gap-2">
+                                        <span class="text-xs text-secondary font-semibold" style="font-weight: 600;">Scenario Presets</span>
+                                        <div class="flex-row gap-2 wrap" id="scenario-presets-container">
+                                            <button class="btn btn-secondary btn-xs preset-btn" data-preset="baseline">🔄 Back to Baseline</button>
+                                            <button class="btn btn-secondary btn-xs preset-btn" data-preset="holiday">📈 Holiday Season</button>
+                                            <button class="btn btn-secondary btn-xs preset-btn" data-preset="promo">🎉 Weekend Promotion</button>
+                                            <button class="btn btn-secondary btn-xs preset-btn" data-preset="discount">💸 10% Discount</button>
+                                            <button class="btn btn-secondary btn-xs preset-btn" data-preset="delay">📦 Supplier Delay</button>
+                                            <button class="btn btn-secondary btn-xs preset-btn" data-preset="surge">📉 Demand Surge</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Price Multiplier Control -->
+                                    <div class="form-group flex-col gap-1">
+                                        <div class="flex-row justify-between align-center">
+                                            <label for="sim-price-slider" class="text-xs">Price Adjustment</label>
+                                            <span class="text-xs success-color font-semibold" id="sim-price-val">Base Price (100%)</span>
+                                        </div>
+                                        <input type="range" id="sim-price-slider" min="70" max="130" value="100" class="form-range" style="width: 100%; height: 6px; border-radius: 3px; accent-color: var(--accent); background: rgba(255,255,255,0.1); outline: none; cursor: pointer;">
+                                    </div>
+
+                                    <!-- Promotion Calendar Overrides -->
+                                    <div class="flex-col gap-2">
+                                        <div class="flex-row justify-between align-center">
+                                            <span class="text-xs">Promotion Calendar Overrides (Days 1 - 30)</span>
+                                            <button class="text-xs accent-color" id="clear-sim-promos-btn" style="background: none; border: none; cursor: pointer; text-decoration: underline;">Clear All</button>
+                                        </div>
+                                        <div class="grid grid-10 gap-1" id="sim-promo-days-grid" style="grid-template-columns: repeat(10, 1fr);">
+                                            <!-- checkboxes generated dynamically for 30 days -->
+                                        </div>
+                                    </div>
+
+                                    <!-- Simulator Delta Dashboard -->
+                                    <div class="grid grid-2 gap-4 mt-2">
+                                        <div class="stat-box flex-col gap-1" style="background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                                            <span class="text-xs text-secondary">Projected Volume Shift</span>
+                                            <span class="font-semibold text-sm text-primary" id="sim-volume-delta">--</span>
+                                        </div>
+                                        <div class="stat-box flex-col gap-1" style="background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                                            <span class="text-xs text-secondary">Projected Revenue Impact</span>
+                                            <span class="font-semibold text-sm text-primary" id="sim-revenue-delta">--</span>
+                                        </div>
+                                    </div>
+                                    <!-- Save controls -->
+                                    <div class="flex-col gap-2 pt-2 mt-2" style="border-top: 1px solid rgba(255,255,255,0.05);">
+                                        <label for="sim-scenario-name" class="text-xs">Scenario Name</label>
+                                        <div class="flex-row gap-2">
+                                            <input type="text" id="sim-scenario-name" class="form-input" placeholder="e.g. Promo Weekend A" style="font-size: 0.72rem; padding: 4px 8px; flex-grow: 1; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-primary);">
+                                            <button class="btn btn-primary btn-xs" id="save-scenario-btn" style="padding: 4px 10px;">
+                                                <i data-lucide="save" style="width: 12px; height: 12px; vertical-align: middle;"></i> Save
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             
                             <!-- Plot Card -->
                             <div class="card glassmorphic chart-card">
@@ -436,6 +506,39 @@
                                 </div>
                             </div>
 
+                            <!-- Decision Support Panel -->
+                            <div class="card glassmorphic border-pulse" id="decision-support-card">
+                                <div class="card-header flex-row align-center gap-2">
+                                    <i data-lucide="shield-alert" class="accent-color"></i>
+                                    <h3>Inventory Decision Support</h3>
+                                </div>
+                                <div class="card-body flex-col gap-4">
+                                    <!-- Stock Status Row -->
+                                    <div class="flex-row justify-between align-center">
+                                        <span class="text-xs text-secondary font-semibold">Safety Stock Health:</span>
+                                        <span class="rating-badge rating-excellent text-xs font-semibold" id="decision-stock-status">HEALTHY</span>
+                                    </div>
+
+                                    <!-- Reorder Recommendation details -->
+                                    <div class="flex-col gap-1" style="background: rgba(255,255,255,0.02); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                                        <span class="text-xs font-semibold text-primary">Replenishment Action:</span>
+                                        <p class="text-xs text-secondary leading-relaxed mt-1" id="decision-action-text">No immediate reorder necessary.</p>
+                                    </div>
+
+                                    <!-- Financial Risk Metrics -->
+                                    <div class="grid grid-2 gap-2 text-xs">
+                                        <div class="flex-col gap-0.5" style="background: rgba(255,255,255,0.01); padding: 6px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.03);">
+                                            <span class="text-secondary text-2xs block">Projected Stockouts</span>
+                                            <span class="font-semibold text-primary mt-1 block" id="decision-stockout-days">0 Days</span>
+                                        </div>
+                                        <div class="flex-col gap-0.5" style="background: rgba(255,255,255,0.01); padding: 6px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.03);">
+                                            <span class="text-secondary text-2xs block">Revenue at Risk</span>
+                                            <span class="font-semibold text-primary mt-1 block" id="decision-revenue-risk">₹0.00</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Metrics Comparison Table Card -->
                             <div class="card glassmorphic">
                                 <div class="card-header">
@@ -446,9 +549,9 @@
                                         <thead>
                                             <tr>
                                                 <th>Model</th>
-                                                <th>MAE</th>
-                                                <th>MAPE</th>
-                                                <th>R²</th>
+                                                <th class="metric-header-info" data-metric="MAE" style="cursor: pointer; text-decoration: underline dotted var(--secondary-color);">MAE <i data-lucide="info" class="inline-icon" style="width: 12px; height: 12px; vertical-align: middle;"></i></th>
+                                                <th class="metric-header-info" data-metric="MAPE" style="cursor: pointer; text-decoration: underline dotted var(--secondary-color);">MAPE <i data-lucide="info" class="inline-icon" style="width: 12px; height: 12px; vertical-align: middle;"></i></th>
+                                                <th class="metric-header-info" data-metric="R2" style="cursor: pointer; text-decoration: underline dotted var(--secondary-color);">R² <i data-lucide="info" class="inline-icon" style="width: 12px; height: 12px; vertical-align: middle;"></i></th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -469,6 +572,36 @@
                                     </ul>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Scenario Comparison History Section -->
+                    <div class="card glassmorphic mt-6 hidden" id="scenario-history-card">
+                        <div class="card-header flex-row justify-between align-center">
+                            <div class="flex-row align-center gap-2">
+                                <i data-lucide="history" class="accent-color"></i>
+                                <h3>Scenario Comparison History</h3>
+                            </div>
+                            <button class="btn btn-secondary btn-xs" id="clear-scenarios-btn">Clear History</button>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table text-sm" id="scenario-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Scenario</th>
+                                        <th>Price Level</th>
+                                        <th>Promo Days</th>
+                                        <th>Projected Volume</th>
+                                        <th>Revenue Est.</th>
+                                        <th>Stockouts</th>
+                                        <th>Recommendation</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="scenario-history-tbody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </section>
@@ -519,40 +652,37 @@
         </aside>
     </div>
 
-    <!-- Help / Viva Guide Modal Overlay -->
-    <div class="modal-backdrop hidden" id="viva-modal">
-        <div class="modal card glassmorphic">
-            <div class="modal-header">
-                <div class="flex-row align-center gap-2">
-                    <i data-lucide="help-circle" class="accent-color"></i>
-                    <h3>ML Explainability & Examiner's Viva Guide</h3>
-                </div>
-                <button class="modal-close-btn" id="close-viva-modal-btn">
-                    <i data-lucide="x"></i>
-                </button>
-            </div>
-            <div class="modal-body scrollable-y">
-                <div class="grid grid-2 gap-6">
-                    <div class="viva-q-box" style="border-left: 3px solid var(--accent); padding-left: 12px;">
-                        <h4 style="font-size: 0.95rem; font-weight: 600;">Q1: Why use a chronological train/test split instead of random split?</h4>
-                        <p class="text-xs text-secondary mt-2">Randomly shuffling time series data causes "temporal leakage" (where future dates leak into the past). We split our data chronologically—training on historical periods and validating on the final 30 days—to evaluate the models under realistic forecasting conditions.</p>
-                    </div>
-                    <div class="viva-q-box" style="border-left: 3px solid var(--success); padding-left: 12px;">
-                        <h4 style="font-size: 0.95rem; font-weight: 600;">Q2: How does recursive forecasting work for Machine Learning models?</h4>
-                        <p class="text-xs text-secondary mt-2">Autoregressive models (Linear Regression, Random Forest) use lag variables ($t-1, t-7$, etc.). To predict the next 30 days, we do not have actual future sales, so we calculate the prediction for day $t$, append it to our sales timeline buffer, and use it as a feature to predict day $t+1$.</p>
-                    </div>
-                    <div class="viva-q-box" style="border-left: 3px solid var(--warning); padding-left: 12px;">
-                        <h4 style="font-size: 0.95rem; font-weight: 600;">Q3: How are the 95% forecast confidence intervals calculated?</h4>
-                        <p class="text-xs text-secondary mt-2">Prophet calculates uncertainty bounds natively. For Linear Regression and Random Forest, we compute the residual standard deviation ($\sigma_e$) on the training set: $\sigma_e = \sqrt{\frac{1}{N}\sum(y_t - \hat{y}_t)^2}$. The 95% confidence bands are projected as: $\text{prediction} \pm 1.96 \cdot \sigma_e$.</p>
-                    </div>
-                    <div class="viva-q-box" style="border-left: 3px solid var(--accent); padding-left: 12px;">
-                        <h4 style="font-size: 0.95rem; font-weight: 600;">Q4: Why compare Prophet with Random Forest and Linear Regression?</h4>
-                        <p class="text-xs text-secondary mt-2">Prophet excels at decomposing additive weekly/yearly seasonality profiles and price discount surges. Random Forest is a non-linear ensemble model that excels at mapping complex, interactive features. Linear Regression serves as our baseline reference model.</p>
-                    </div>
+    <!-- Explainability & Learning Center Panel (slide-out, collapsible) -->
+    <aside class="learning-panel" id="learning-panel">
+        <div class="learning-panel-header">
+            <div class="learning-header-title">
+                <i data-lucide="book-open" class="accent-color"></i>
+                <div>
+                    <h3>Learning Center</h3>
+                    <span>ML Methodology & Explainers</span>
                 </div>
             </div>
+            <button class="learning-close-btn" id="close-learning-btn">
+                <i data-lucide="x"></i>
+            </button>
         </div>
-    </div>
+        
+        <!-- Tab Navigation inside panel -->
+        <div class="learning-tabs">
+            <button class="learning-tab-btn active" id="learning-insights-tab">
+                <i data-lucide="sparkles" class="tab-icon"></i>
+                <span>Insights</span>
+            </button>
+            <button class="learning-tab-btn" id="learning-glossary-tab">
+                <i data-lucide="help-circle" class="tab-icon"></i>
+                <span>Glossary</span>
+            </button>
+        </div>
+        
+        <div class="learning-content-container scrollable-y" id="learning-content">
+            <!-- Dynamic Content Injected Here -->
+        </div>
+    </aside>
 
     <!-- PRINT ONLY PDF REPORT TEMPLATE -->
     <div id="print-report-template" class="print-only">
