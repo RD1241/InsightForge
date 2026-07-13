@@ -40,6 +40,16 @@ async def upload_dataset(file: UploadFile = File(...)):
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported.")
         
+    # Enforce file size limit of 50 MB
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+    file_content = await file.read(MAX_FILE_SIZE + 1)
+    if len(file_content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413, 
+            detail="File size exceeds the 50 MB limit. Please upload a smaller CSV."
+        )
+    await file.seek(0)
+        
     temp_path = os.path.join(DATA_DIR, f"temp_{file.filename}")
     try:
         # Save upload to a temporary file first

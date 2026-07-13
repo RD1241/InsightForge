@@ -59,6 +59,66 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    // --- Toast Notification helper ---
+    function showToast(message, type = "info") {
+        const container = document.getElementById("toast-container");
+        if (!container) return;
+        
+        const toast = document.createElement("div");
+        toast.className = `toast toast-${type}`;
+        
+        let iconName = "info";
+        if (type === "success") iconName = "check-circle";
+        if (type === "error") iconName = "alert-octagon";
+        if (type === "warning") iconName = "alert-triangle";
+        
+        toast.innerHTML = `
+            <i data-lucide="${iconName}"></i>
+            <span>${message}</span>
+        `;
+        container.appendChild(toast);
+        lucide.createIcons();
+        
+        // Trigger reflow to animate
+        toast.offsetHeight;
+        toast.classList.add("show");
+        
+        // Remove after 4 seconds
+        setTimeout(() => {
+            toast.classList.remove("show");
+            setTimeout(() => {
+                toast.remove();
+            }, 300);
+        }, 4000);
+    }
+
+    // --- Connection Resiliency Polling ---
+    let isOffline = false;
+    async function checkConnectionHealth() {
+        try {
+            const response = await fetch(`${API_URL}/api/dataset/status`, { method: "GET" });
+            if (response.ok) {
+                if (isOffline) {
+                    isOffline = false;
+                    document.getElementById("offline-overlay").classList.add("hidden");
+                    showToast("FastAPI backend server re-connected successfully.", "success");
+                    // Refresh current page status
+                    checkDatasetStatus();
+                }
+            } else {
+                throw new Error("Server responded with error status.");
+            }
+        } catch (err) {
+            if (!isOffline) {
+                isOffline = true;
+                document.getElementById("offline-overlay").classList.remove("hidden");
+                showToast("Connection to backend server lost.", "error");
+            }
+        }
+    }
+    // Poll connection health every 5 seconds
+    setInterval(checkConnectionHealth, 5000);
+
     // --- DOM Elements Cache ---
     const el = {
         menuItems: document.querySelectorAll(".menu-item"),
@@ -141,8 +201,22 @@ document.addEventListener("DOMContentLoaded", () => {
         chatSuggestions: document.getElementById("chat-suggestions"),
         chatInputText: document.getElementById("chat-input-text"),
         chatSendBtn: document.getElementById("chat-send-btn"),
-        explainChartBtns: document.querySelectorAll(".explain-chart-btn")
+        explainChartBtns: document.querySelectorAll(".explain-chart-btn"),
+
+        // Offline retry button
+        retryConnectionBtn: document.getElementById("retry-connection-btn")
     };
+
+    // --- Responsive Chart Resizing ---
+    window.addEventListener("resize", () => {
+        const charts = ["chart-sales-trend", "chart-correlation", "chart-weekly", "chart-monthly", "chart-forecast"];
+        charts.forEach(id => {
+            const container = document.getElementById(id);
+            if (container && container.clientWidth > 0 && typeof Plotly !== 'undefined') {
+                Plotly.Plots.resize(container);
+            }
+        });
+    });
 
     // --- View Router ---
     function navigateToPage(pageId) {
@@ -150,7 +224,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Validation check for guided workflow
         if (pageId !== "data-hub" && !state.datasetLoaded) {
-            alert("Please load or upload a dataset in the Data Hub first.");
+            showToast("Please load or upload a dataset in the Data Hub first.", "warning");
             return;
         }
 
@@ -275,6 +349,7 @@ document.addEventListener("DOMContentLoaded", () => {
             el.demoLoadStatus.className = "mt-3 text-center text-sm success-color";
             
             setDatasetLoadedState(true, "synthetic_retail_data.csv", data.report.stats);
+            showToast("Demo retail dataset loaded successfully!", "success");
             
             // Show alert box warnings if any
             if (data.report.warnings && data.report.warnings.length > 0) {
@@ -289,6 +364,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             el.demoLoadStatus.textContent = `Error: ${error.message}`;
             el.demoLoadStatus.className = "mt-3 text-center text-sm error-color";
+            showToast(`Failed to load demo: ${error.message}`, "error");
         } finally {
             el.loadDemoBtn.disabled = false;
         }
@@ -326,6 +402,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     async function handleFileUpload(file) {
+        // Enforce 50 MB size limit check on the client side
+        const MAX_SIZE = 50 * 1024 * 1024; // 50 MB
+        if (file.size > MAX_SIZE) {
+            showToast("File size exceeds 50 MB limit. Please upload a smaller CSV.", "error");
+            el.selectedFileInfo.textContent = "Upload rejected: File too large (Max 50 MB).";
+            el.selectedFileInfo.className = "file-info error-color";
+            return;
+        }
+
         el.selectedFileInfo.textContent = `Uploading: ${file.name} (${(file.size / 1024).toFixed(1)} KB)...`;
         el.selectedFileInfo.className = "file-info text-secondary";
         
@@ -338,6 +423,7 @@ document.addEventListener("DOMContentLoaded", () => {
             el.selectedFileInfo.className = "file-info success-color";
             
             setDatasetLoadedState(true, file.name, data.report.stats);
+            showToast("Dataset uploaded and validated successfully!", "success");
             
             if (data.report.warnings && data.report.warnings.length > 0) {
                 el.validationWarningsBox.classList.remove("hidden");
@@ -351,6 +437,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             el.selectedFileInfo.textContent = `Upload failed: ${error.message}`;
             el.selectedFileInfo.className = "file-info error-color";
+            showToast(`Upload failed: ${error.message}`, "error");
             setDatasetLoadedState(false);
         }
     }
@@ -443,6 +530,7 @@ document.addEventListener("DOMContentLoaded", () => {
             el.loaderCorrelation.classList.add("hidden");
             el.loaderWeekly.classList.add("hidden");
             el.loaderMonthly.classList.add("hidden");
+            showToast("Failed to load descriptive EDA dashboard.", "error");
         }
     }
 
@@ -558,6 +646,7 @@ document.addEventListener("DOMContentLoaded", () => {
             clearInterval(progressInterval);
             el.trainingProgressFill.style.width = "100%";
             el.trainingProgressText.textContent = "Training optimization complete!";
+            showToast("Forecasting models trained successfully!", "success");
             
             setTimeout(() => {
                 el.trainingProgressBox.classList.add("hidden");
@@ -571,6 +660,7 @@ document.addEventListener("DOMContentLoaded", () => {
             el.trainingProgressText.textContent = `Training failed: ${error.message}`;
             el.trainingProgressFill.style.backgroundColor = "var(--error)";
             el.trainModelsBtn.disabled = false;
+            showToast(`Training failed: ${error.message}`, "error");
         }
     });
 
@@ -679,6 +769,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // Draw Forecast
             drawForecastChart(data);
+            showToast(`Forecast generated using ${data.model_used}.`, "info");
             
             // Hide spinner on success
             el.loaderForecast.classList.add("hidden");
@@ -686,7 +777,7 @@ document.addEventListener("DOMContentLoaded", () => {
             console.error("Forecast failed:", error);
             // Hide spinner even on failure
             el.loaderForecast.classList.add("hidden");
-            alert(`Error generating forecast: ${error.message}`);
+            showToast(`Forecast failed: ${error.message}`, "error");
         } finally {
             el.runForecastBtn.disabled = false;
         }
@@ -1027,12 +1118,27 @@ document.addEventListener("DOMContentLoaded", () => {
                 window.print();
             } catch (err) {
                 console.error("Failed to generate chart image for print:", err);
-                alert("Could not render chart into PDF. Printing text details instead.");
+                showToast("Could not render chart into PDF. Printing text details instead.", "warning");
                 window.print();
             } finally {
                 el.exportReportBtn.disabled = false;
                 el.exportReportBtn.innerHTML = originalBtnText;
             }
+        });
+    }
+
+    // Offline overlay retry connection binding
+    if (el.retryConnectionBtn) {
+        el.retryConnectionBtn.addEventListener("click", () => {
+            el.retryConnectionBtn.disabled = true;
+            const btnSpan = el.retryConnectionBtn.querySelector("span");
+            const originalText = btnSpan.textContent;
+            btnSpan.textContent = "Checking Server Connection...";
+            
+            checkConnectionHealth().finally(() => {
+                el.retryConnectionBtn.disabled = false;
+                btnSpan.textContent = originalText;
+            });
         });
     }
 

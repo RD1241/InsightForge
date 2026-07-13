@@ -31,6 +31,47 @@ def get_product_lookup_str() -> str:
     except Exception as e:
         return f"Error building product list: {str(e)}"
 
+def resolve_product_id(input_str: str) -> str:
+    """
+    Resolves product queries fuzzy-style when the LLM extracts slightly malformed
+    names, synonyms, or lowercase references instead of exact IDs.
+    Returns the mapped active catalog ID, or the original string as a fallback.
+    """
+    if not input_str:
+        return ""
+    input_str = input_str.strip().lower()
+
+    if not os.path.exists(ACTIVE_DATASET_PATH):
+        return input_str
+        
+    try:
+        df = pd.read_csv(ACTIVE_DATASET_PATH)
+        df_clean = clean_dataset(df)
+        df_unique = df_clean[['product_id', 'product_name']].drop_duplicates()
+        
+        # 1. Exact case-insensitive match on product_id
+        for _, row in df_unique.iterrows():
+            pid = str(row['product_id'])
+            if pid.lower() == input_str:
+                return pid
+                
+        # 2. Case-insensitive substring match (e.g. "milk" -> "PRD_01")
+        for _, row in df_unique.iterrows():
+            pid = str(row['product_id'])
+            pname = str(row['product_name']).lower()
+            if input_str in pname or pname in input_str:
+                return pid
+                
+        # 3. Mapped ID within the input string
+        for _, row in df_unique.iterrows():
+            pid = str(row['product_id'])
+            if pid.lower() in input_str:
+                return pid
+    except Exception:
+        pass
+        
+    return input_str
+
 def run_agent_query(user_message: str, session_id: str) -> str:
     """
     Executes the AI Analyst workflow:
@@ -103,15 +144,15 @@ OR
                 tool_output = tools.inventory_health()
             elif tool_name == "sales_summary":
                 tool_output = tools.sales_summary()
-            elif tool_name == "compare_sales":
-                pid = str(tool_args.get("product_id", ""))
-                tool_output = tools.compare_sales(product_id=pid)
-            elif tool_name == "forecast_product":
-                pid = str(tool_args.get("product_id", ""))
-                tool_output = tools.forecast_product(product_id=pid)
-            elif tool_name == "model_comparison":
-                pid = str(tool_args.get("product_id", ""))
-                tool_output = tools.model_comparison(product_id=pid)
+            elif tool_name in ["compare_sales", "forecast_product", "model_comparison"]:
+                pid = resolve_product_id(str(tool_args.get("product_id", "")))
+                
+                if tool_name == "compare_sales":
+                    tool_output = tools.compare_sales(product_id=pid)
+                elif tool_name == "forecast_product":
+                    tool_output = tools.forecast_product(product_id=pid)
+                elif tool_name == "model_comparison":
+                    tool_output = tools.model_comparison(product_id=pid)
             elif tool_name == "generate_business_insights":
                 tool_output = tools.business_insights()
         except Exception as e:

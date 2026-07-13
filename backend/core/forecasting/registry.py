@@ -1,6 +1,7 @@
 import os
 import json
 import pickle
+import threading
 from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -10,6 +11,9 @@ TRAINING_REPORT_PATH = os.path.join(MODELS_STORE_DIR, "training_report.json")
 
 # Ensure models store exists
 os.makedirs(MODELS_STORE_DIR, exist_ok=True)
+
+# Threading lock to prevent race conditions during concurrent training runs
+_registry_lock = threading.Lock()
 
 def get_recommendation_reason(model_name: str, metrics: dict) -> str:
     """
@@ -50,30 +54,30 @@ def save_model(product_id: str, model_name: str, model_obj, metrics: dict):
     with open(file_path, "wb") as f:
         pickle.dump(model_obj, f)
         
-    # 2. Update models_registry.json
-    registry = {}
-    if os.path.exists(REGISTRY_JSON_PATH):
-        try:
-            with open(REGISTRY_JSON_PATH, "r") as f:
-                registry = json.load(f)
-        except Exception:
-            registry = {}
+    # 2. Update models_registry.json under thread lock to prevent concurrent write corruption
+    with _registry_lock:
+        registry = {}
+        if os.path.exists(REGISTRY_JSON_PATH):
+            try:
+                with open(REGISTRY_JSON_PATH, "r") as f:
+                    registry = json.load(f)
+            except Exception:
+                registry = {}
+                
+        if product_id not in registry:
+            registry[product_id] = {}
             
-    # Structure: registry[product_id][model_name] = metadata
-    if product_id not in registry:
-        registry[product_id] = {}
+        registry[product_id][model_name] = {
+            "model_name": model_name,
+            "product_id": product_id,
+            "metrics": metrics,
+            "model_path": file_path,
+            "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
         
-    registry[product_id][model_name] = {
-        "model_name": model_name,
-        "product_id": product_id,
-        "metrics": metrics,
-        "model_path": file_path,
-        "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-    
-    with open(REGISTRY_JSON_PATH, "w") as f:
-        json.dump(registry, f, indent=4)
-        
+        with open(REGISTRY_JSON_PATH, "w") as f:
+            json.dump(registry, f, indent=4)
+            
     return file_path
 
 def load_model(product_id: str, model_name: str):
