@@ -297,40 +297,110 @@ def aggregate_to_product_level(df: pd.DataFrame) -> pd.DataFrame:
     df_product = df_product.sort_values(by=['product_id', 'date']).reset_index(drop=True)
     return df_product
 
+
+def ensure_regular_daily_grid(df_product: pd.DataFrame) -> pd.DataFrame:
+    """
+    Guarantees a strict, continuous daily calendar for every product.
+
+    Retail datasets frequently omit dates where zero units were sold (no
+    transaction recorded), creating invisible gaps in the time series.  When
+    lag features are computed with .shift(N) on a gapped series the N-th shift
+    no longer corresponds to exactly N calendar days — it silently picks up
+    data from N *rows* ago, which may be several real days earlier.  This
+    corrupts every lag and rolling-window feature.
+
+    This function:
+      1. Builds the complete global date range (global min → global max).
+      2. Reindexes each product independently to that range.
+      3. Fills missing sales and promotion_flag with 0 (no transaction = 0 units sold).
+      4. Forward-fills then back-fills price and stock_on_hand (last known
+         price / stock persists until a new record is observed).
+      5. Carries metadata columns (product_name, category) forward.
+
+    Returns a DataFrame with no date gaps, ready for lag/rolling feature
+    engineering.
+    """
+    global_min = df_product['date'].min()
+    global_max = df_product['date'].max()
+    full_date_range = pd.date_range(start=global_min, end=global_max, freq='D')
+
+    filled_parts = []
+    for pid, grp in df_product.groupby('product_id'):
+        grp = grp.set_index('date').sort_index()
+        # Reindex to full calendar
+        grp = grp.reindex(full_date_range)
+
+        # Restore product_id (lost after reindex)
+        grp['product_id'] = pid
+
+        # Zero-fill sales and promotions — absence of transaction = 0 sold
+        grp['units_sold'] = grp['units_sold'].fillna(0).astype(int)
+        grp['promotion_flag'] = grp['promotion_flag'].fillna(0).astype(int)
+
+        # Forward-fill then back-fill slowly-changing columns
+        for col in ['price', 'stock_on_hand']:
+            if col in grp.columns:
+                grp[col] = grp[col].ffill().bfill()
+
+        # Carry metadata forward (product_name, category may be NaN on filled rows)
+        for col in ['product_name', 'category']:
+            if col in grp.columns:
+                grp[col] = grp[col].ffill().bfill()
+
+        # Restore date as a regular column
+        grp.index.name = 'date'
+        grp = grp.reset_index()
+        filled_parts.append(grp)
+
+    df_aligned = pd.concat(filled_parts, ignore_index=True)
+    df_aligned = df_aligned.sort_values(by=['product_id', 'date']).reset_index(drop=True)
+    return df_aligned
+
 def build_features(df_product: pd.DataFrame) -> pd.DataFrame:
     """
-    Engineers time series features on product-aggregated dataframe:
-    - Calendar features (day_of_week, month, is_weekend, day_of_year)
-    - Lag features (1, 7, 14 days)
-    - Rolling window features (7, 30 days mean of units_sold)
+    Engineers time series features on product-aggregated dataframe.
+
+    IMPORTANT — daily grid alignment is performed first:
+    Before any shift/rolling operation the dataframe is passed through
+    ensure_regular_daily_grid() so that every product has a continuous
+    daily entry.  This guarantees that shift(N) always corresponds to
+    exactly N *calendar* days, not N rows.
+
+    Features engineered:
+    - Calendar: day_of_week, month, is_weekend, day_of_year
+    - Lags: 1, 7, 14 days
+    - Rolling windows: 7-day mean, 30-day mean (shift-1 to avoid leakage)
     """
-    df_feat = df_product.copy()
-    
+    # Align to complete daily calendar BEFORE computing any lag / rolling features
+    df_feat = ensure_regular_daily_grid(df_product)
+
     # Calendar features
     df_feat['day_of_week'] = df_feat['date'].dt.dayofweek
     df_feat['month'] = df_feat['date'].dt.month
     df_feat['is_weekend'] = df_feat['day_of_week'].isin([5, 6]).astype(int)
     df_feat['day_of_year'] = df_feat['date'].dt.dayofyear
-    
-    # Lags
-    df_feat['units_sold_lag_1'] = df_feat.groupby('product_id')['units_sold'].shift(1)
-    df_feat['units_sold_lag_7'] = df_feat.groupby('product_id')['units_sold'].shift(7)
+
+    # Lag features — grouped per product so lags never cross product boundaries
+    df_feat['units_sold_lag_1']  = df_feat.groupby('product_id')['units_sold'].shift(1)
+    df_feat['units_sold_lag_7']  = df_feat.groupby('product_id')['units_sold'].shift(7)
     df_feat['units_sold_lag_14'] = df_feat.groupby('product_id')['units_sold'].shift(14)
-    
-    # Rolling averages (using closed='left' to prevent data leakage)
+
+    # Rolling averages — shift(1) applied inside transform to prevent target leakage
     df_feat['units_sold_roll_mean_7'] = df_feat.groupby('product_id')['units_sold'].transform(
         lambda x: x.shift(1).rolling(window=7, min_periods=1).mean()
     )
     df_feat['units_sold_roll_mean_30'] = df_feat.groupby('product_id')['units_sold'].transform(
         lambda x: x.shift(1).rolling(window=30, min_periods=1).mean()
     )
-    
-    # Backfill/Forwardfill features
+
+    # Fill any remaining NaNs at the start of each product's history
     features_to_fill = [
         'units_sold_lag_1', 'units_sold_lag_7', 'units_sold_lag_14',
         'units_sold_roll_mean_7', 'units_sold_roll_mean_30'
     ]
     for col in features_to_fill:
-        df_feat[col] = df_feat.groupby('product_id')[col].transform(lambda x: x.bfill().ffill().fillna(0.0))
-        
+        df_feat[col] = df_feat.groupby('product_id')[col].transform(
+            lambda x: x.bfill().ffill().fillna(0.0)
+        )
+
     return df_feat

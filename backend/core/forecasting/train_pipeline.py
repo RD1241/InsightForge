@@ -7,10 +7,70 @@ from datetime import datetime, timedelta
 # Import other core modules
 from core.forecasting.preprocessor import clean_dataset, aggregate_to_product_level, build_features
 from core.forecasting.models import (
-    LinearRegressionModel, RandomForestModel, ProphetModel, 
+    LinearRegressionModel, RandomForestModel, ProphetModel,
     evaluate_predictions, PROPHET_AVAILABLE
 )
 from core.forecasting.registry import save_model, save_training_report, get_best_model_metadata, load_model, get_product_models
+
+
+def _recursive_validation_predict(model, train_df: pd.DataFrame, test_df: pd.DataFrame) -> np.ndarray:
+    """
+    Evaluates an ML model on the test set using the same recursive multi-step
+    forecasting strategy that is used in production (generate_future_forecast).
+
+    WHY THIS MATTERS
+    ----------------
+    If we simply call model.predict(test_df) the test rows already contain lag
+    features computed from *actual* future sales (e.g. units_sold_lag_1 on the
+    second test day = the real first test day's sales).  The model therefore
+    "sees" the true future at every step — this is data leakage and produces
+    artificially optimistic MAE / MAPE / R² scores.
+
+    RECURSIVE WALK-FORWARD APPROACH
+    --------------------------------
+    1. Seed the rolling buffer with the last 30 days of *training* actuals.
+    2. For each test step, reconstruct lag and rolling features from the buffer
+       (same code as generate_future_forecast).
+    3. Predict using the model, record the prediction, then append it to the
+       buffer so the NEXT step's lag_1 = the CURRENT step's prediction.
+
+    This matches production behaviour exactly and gives honest error rates.
+    """
+    # Seed buffer from the tail of the training set (actual actuals)
+    sales_buffer = list(train_df['units_sold'].values[-30:])
+
+    avg_price = float(test_df['price'].mean())
+
+    predictions = []
+    for _, row in test_df.iterrows():
+        # Rebuild lag / rolling features from the rolling buffer
+        lag_1  = sales_buffer[-1]
+        lag_7  = sales_buffer[-7]  if len(sales_buffer) >= 7  else sales_buffer[0]
+        lag_14 = sales_buffer[-14] if len(sales_buffer) >= 14 else sales_buffer[0]
+        roll_7  = float(np.mean(sales_buffer[-7:]))
+        roll_30 = float(np.mean(sales_buffer[-30:]))
+
+        feat_row = pd.DataFrame([{
+            'price':                  avg_price,
+            'promotion_flag':         int(row.get('promotion_flag', 0)),
+            'day_of_week':            int(row['day_of_week']),
+            'month':                  int(row['month']),
+            'is_weekend':             int(row['is_weekend']),
+            'day_of_year':            int(row['day_of_year']),
+            'units_sold_lag_1':       lag_1,
+            'units_sold_lag_7':       lag_7,
+            'units_sold_lag_14':      lag_14,
+            'units_sold_roll_mean_7': roll_7,
+            'units_sold_roll_mean_30':roll_30,
+        }])
+
+        pred_result = model.predict(feat_row)
+        pred_val    = float(pred_result['predictions'][0])
+
+        predictions.append(pred_val)
+        sales_buffer.append(pred_val)   # compound — next step uses this prediction
+
+    return np.array(predictions)
 
 def run_training_pipeline(df_raw: pd.DataFrame) -> dict:
     """
@@ -53,26 +113,30 @@ def run_training_pipeline(df_raw: pd.DataFrame) -> dict:
         # --- Model 1: Linear Regression ---
         lr_model = LinearRegressionModel()
         lr_model.fit(train_df)
-        lr_preds = lr_model.predict(test_df)["predictions"]
+        # Use recursive walk-forward evaluation to avoid validation leakage
+        lr_preds = _recursive_validation_predict(lr_model, train_df, test_df)
         lr_metrics = evaluate_predictions(y_test, lr_preds)
         save_model(pid, "Linear Regression", lr_model, lr_metrics)
         models_trained["Linear Regression"] = lr_metrics
-        
+
         # --- Model 2: Random Forest ---
         rf_model = RandomForestModel()
         rf_model.fit(train_df)
-        rf_preds = rf_model.predict(test_df)["predictions"]
+        # Use recursive walk-forward evaluation to avoid validation leakage
+        rf_preds = _recursive_validation_predict(rf_model, train_df, test_df)
         rf_metrics = evaluate_predictions(y_test, rf_preds)
         save_model(pid, "Random Forest", rf_model, rf_metrics)
         models_trained["Random Forest"] = rf_metrics
-        
+
         # --- Model 3: Prophet (if available) ---
+        # Prophet constructs its own future dataframe internally; its predict()
+        # is already fully out-of-sample and does not suffer from lag leakage.
         if PROPHET_AVAILABLE:
             try:
                 prophet_model = ProphetModel()
                 prophet_model.fit(train_df)
-                prophet_res = prophet_model.predict(test_df)
-                prophet_preds = prophet_res["predictions"]
+                prophet_res    = prophet_model.predict(test_df)
+                prophet_preds  = prophet_res["predictions"]
                 prophet_metrics = evaluate_predictions(y_test, prophet_preds)
                 save_model(pid, "Prophet", prophet_model, prophet_metrics)
                 models_trained["Prophet"] = prophet_metrics
