@@ -87,21 +87,23 @@ You are the routing and classification agent for InsightForge (AI Retail Decisio
 Your task is to analyze the user's query and decide if we need to call a backend tool, and extract its arguments.
 
 AVAILABLE BACKEND TOOLS:
-1. `top_selling_products(limit: int)`: Use when asked about highest selling, most popular, or top products by volume. (Default limit: 5)
-2. `low_stock_products(threshold_days: int)`: Use when asked about items running low, running out of stock, needing replenishment, or restock alerts. (Default threshold_days: 10)
-3. `inventory_health()`: Use when asked about overall stock status, overstock rate, understock rate, or inventory health count.
-4. `sales_summary()`: Use when asked for general sales volume, estimated revenues, and product category breakdowns.
-5. `compare_sales(product_id: str)`: Use when comparing sales of a specific product over time (e.g. this month vs last month).
-6. `forecast_product(product_id: str)`: Use when asked to show, explain, or forecast future demand/sales for a specific product.
-7. `model_comparison(product_id: str)`: Use when asked why a model was selected, or to compare metrics (MAE, MAPE, R2) for a specific product.
-8. `generate_business_insights()`: Use when asked for business advice, slow-moving items, general recommendations, or business insights.
+1. `list_products()`: Use when asked what products, items, categories, or catalog options are available to forecast or audit.
+2. `top_selling_products(limit: int)`: Use when asked about highest selling, most popular, or top products by volume. (Default limit: 5)
+3. `low_stock_products(threshold_days: int)`: Use when asked about items running low, running out of stock, needing replenishment, or restock alerts. (Default threshold_days: 10)
+4. `inventory_health()`: Use when asked about overall stock status, overstock rate, understock rate, or inventory health count.
+5. `sales_summary()`: Use when asked for general sales volume, estimated revenues, and product category breakdowns.
+6. `compare_sales(product_id: str)`: Use when comparing sales of a specific product over time (e.g. this month vs last month).
+7. `forecast_product(product_id: str)`: Use when asked to show or forecast future sales/predictions for a specific product.
+8. `explain_forecast_decomposition(product_id: str)`: Use when asked what drives the forecast, what factors influence demand, how much promotions or weekly seasonality affect future sales, or to show a forecast breakdown.
+9. `model_comparison(product_id: str)`: Use when asked why a model was selected, or to compare validation metrics (MAE, MAPE, R2) for a specific product.
+10. `generate_business_insights()`: Use when asked for business advice, slow-moving items, general recommendations, or business insights.
 
 PRODUCT LOOKUP DICTIONARY (Match queries to these exact IDs):
 {product_lookup}
 
 ROUTING RULES:
 - Output a single JSON object with keys: "tool_name" and "arguments".
-- "tool_name" MUST be one of the 8 tools listed above, or "none" if the query is a general greeting, about machine learning concepts, or general help.
+- "tool_name" MUST be one of the 10 tools listed above, or "none" if the query is a general greeting, about machine learning concepts, or general help.
 - "arguments" is a dictionary of parameters for the tool. For example, if product is milk, map it to ID 'PRD_01' based on the lookup list.
 - If the user asks about 'this product' or 'the current product' and didn't specify one, check if a product is mentioned in your lookup or default to the top-selling product ID.
 
@@ -134,7 +136,9 @@ OR
         print(f"Agent classified query. Executing tool '{tool_name}' with args '{tool_args}'...")
         try:
             # Map tool name to function execution
-            if tool_name == "top_selling_products":
+            if tool_name == "list_products":
+                tool_output = tools.list_products()
+            elif tool_name == "top_selling_products":
                 limit = int(tool_args.get("limit", 5))
                 tool_output = tools.top_selling_products(limit=limit)
             elif tool_name == "low_stock_products":
@@ -144,7 +148,7 @@ OR
                 tool_output = tools.inventory_health()
             elif tool_name == "sales_summary":
                 tool_output = tools.sales_summary()
-            elif tool_name in ["compare_sales", "forecast_product", "model_comparison"]:
+            elif tool_name in ["compare_sales", "forecast_product", "model_comparison", "explain_forecast_decomposition"]:
                 pid = resolve_product_id(str(tool_args.get("product_id", "")))
                 
                 if tool_name == "compare_sales":
@@ -153,8 +157,10 @@ OR
                     tool_output = tools.forecast_product(product_id=pid)
                 elif tool_name == "model_comparison":
                     tool_output = tools.model_comparison(product_id=pid)
+                elif tool_name == "explain_forecast_decomposition":
+                    tool_output = tools.explain_forecast_decomposition(product_id=pid)
             elif tool_name == "generate_business_insights":
-                tool_output = tools.business_insights()
+                tool_output = tools.generate_business_insights()
         except Exception as e:
             print(f"Tool execution failed: {str(e)}")
             tool_output = {"status": "error", "message": f"Failed to execute tool {tool_name}: {str(e)}"}
@@ -172,11 +178,8 @@ RULES:
 1. Always base your numbers, statistics, and forecasts on the provided "Structured Data Context". Do not invent/hallucinate numbers.
 2. If a tool was executed and returned data, translate that structured JSON data into a clear, friendly, and professional natural language response.
 3. Keep recommendations strictly evidence-based. Do not speculate on external factors (such as competitor actions, consumer tastes, or economic conditions) that are not present in the data.
-4. Clearly distinguish between:
-   - Observations (e.g. sales are down 18% compared to the prior period).
-   - Forecasts (e.g. predicted sales for the next 30 days are 120 units).
-   - Recommendations (e.g. the system recommends scheduling a replenishment order of 150 units).
-5. When explaining metrics (like MAE, MAPE, R²), explain them simply so a store manager can understand them.
+4. When explaining a forecast decomposition (trend, seasonality, promo percentages), use the exact calculations provided in the context. Explain them clearly, highlighting which driver is the strongest.
+5. When explaining metrics (like MAE, MAPE, R²), reference the 'human_friendly_explanation' template in the context to explain what they mean in simple business terms.
 6. If the structured context indicates an error or no active dataset, politely tell the user to upload a dataset or load the demo.
 """
     

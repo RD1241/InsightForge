@@ -70,6 +70,19 @@ def test_toolbelt():
     print(f"   Slow Movers count: {len(insights['slow_moving_products'])}")
     print(f"   Critical Restock Alerts count: {len(insights['critical_restock_alerts'])}")
 
+    # 8. Test list_products
+    print("\n8. Testing tools.list_products()...")
+    catalog = tools.list_products()
+    print(f"   Status: {catalog['status']}")
+    print(f"   Categories in Catalog: {list(catalog['catalog'].keys())}")
+
+    # 9. Test explain_forecast_decomposition
+    print("\n9. Testing tools.explain_forecast_decomposition()...")
+    decomp = tools.explain_forecast_decomposition("PRD_01")
+    print(f"   Status: {decomp['status']}")
+    print(f"   Product: {decomp['product_name']} | Model: {decomp['model_used']}")
+    print(f"   Decomposition Weights: {decomp['decomposition']}")
+
     print("\n=== All AI Tools Executed and Verified Successfully! ===")
     return True
 

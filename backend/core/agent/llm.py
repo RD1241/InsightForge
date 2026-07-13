@@ -14,27 +14,46 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
 
-# In-memory session memory for v1 (retains last 5 message pairs)
-session_memories = {}
+# Persistent session memory directory
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+SESSIONS_DIR = os.path.join(BASE_DIR, "data", "sessions")
+os.makedirs(SESSIONS_DIR, exist_ok=True)
 
 def get_session_history(session_id: str) -> list:
     """
     Retrieves the short term memory history for a session ID.
+    Reads from a persistent JSON file.
     Limits to last 10 messages (5 turns).
     """
-    if session_id not in session_memories:
-        session_memories[session_id] = []
-    return session_memories[session_id]
+    # Sanitize session_id to prevent directory traversal
+    safe_session_id = "".join(c for c in session_id if c.isalnum() or c in ("-", "_"))
+    file_path = os.path.join(SESSIONS_DIR, f"{safe_session_id}.json")
+    
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
 
 def add_message_to_history(session_id: str, role: str, content: str):
     """
-    Adds a message to the session memory, maintaining the limit.
+    Adds a message to the session memory, maintaining the limit, and persists it.
     """
     history = get_session_history(session_id)
     history.append({"role": role, "content": content})
     # Keep last 10 messages (5 user, 5 assistant)
     if len(history) > 10:
-        session_memories[session_id] = history[-10:]
+        history = history[-10:]
+        
+    safe_session_id = "".join(c for c in session_id if c.isalnum() or c in ("-", "_"))
+    file_path = os.path.join(SESSIONS_DIR, f"{safe_session_id}.json")
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=4)
+    except Exception as e:
+        print(f"Failed to save chat session history: {str(e)}")
 
 def call_llm(messages: list, require_json: bool = False) -> str:
     """

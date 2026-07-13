@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 # Import preprocessor functions
 from core.forecasting.preprocessor import clean_dataset, aggregate_to_product_level
-from core.forecasting.registry import get_best_model_metadata, get_product_models, load_training_report
+from core.forecasting.registry import get_best_model_metadata, get_product_models, load_model, load_training_report
 from core.forecasting.train_pipeline import generate_future_forecast
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,6 +21,33 @@ def get_loaded_df():
     return clean_dataset(df)
 
 # --- Core Analyst Tools ---
+
+def list_products() -> dict:
+    """
+    Returns a catalog of all unique products available in the active dataset,
+    grouped by category, with their IDs and names. Help LLM guide catalog queries.
+    """
+    try:
+        df = get_loaded_df()
+        unique_prods = df[['product_id', 'product_name', 'category']].drop_duplicates()
+        
+        catalog = {}
+        for _, row in unique_prods.iterrows():
+            cat = str(row['category'])
+            if cat not in catalog:
+                catalog[cat] = []
+            catalog[cat].append({
+                "product_id": str(row['product_id']),
+                "product_name": str(row['product_name'])
+            })
+            
+        return {
+            "status": "success",
+            "metric_type": "product_catalog",
+            "catalog": catalog
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to list product catalog: {str(e)}"}
 
 def top_selling_products(limit: int = 5) -> dict:
     """
@@ -195,7 +222,6 @@ def forecast_product(product_id: str) -> dict:
     df = get_loaded_df()
     try:
         forecast_res = generate_future_forecast(df, product_id, horizon_days=30)
-        # Summarize prediction variables for the LLM
         future_preds = forecast_res["forecast"]["predictions"]
         
         return {
@@ -214,6 +240,180 @@ def forecast_product(product_id: str) -> dict:
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+def _run_ml_forecast_with_overrides(model, history_subset, horizon_days=30, override_promo=False, override_season=False) -> float:
+    """
+    Helper to run recursive ML forecasting with specific features muted/neutralized
+    to determine mathematical feature group contributions counterfactually.
+    """
+    sales_buffer = history_subset['units_sold'].tolist()
+    last_historic_promo = 0 if override_promo else history_subset['promotion_flag'].iloc[-1]
+    future_promos = [last_historic_promo] + [0] * horizon_days
+    
+    avg_price = float(history_subset['price'].mean())
+    feat_row = pd.DataFrame(np.zeros((1, len(model.feature_cols))), columns=model.feature_cols)
+    feat_row.at[0, 'price'] = avg_price
+    
+    predictions_sum = 0.0
+    
+    last_historic_date = history_subset['date'].max()
+    future_dates = [last_historic_date + timedelta(days=i) for i in range(1, horizon_days + 1)]
+    
+    for step, fut_date in enumerate(future_dates, start=1):
+        if override_season:
+            # Set to Wednesday in June (neutral weekday, no weekend impact)
+            day_of_week = 2
+            month = 6
+            is_weekend = 0
+            day_of_year = 180
+        else:
+            day_of_week = fut_date.weekday()
+            month = fut_date.month
+            is_weekend = 1 if day_of_week in [5, 6] else 0
+            day_of_year = fut_date.timetuple().tm_yday
+            
+        lag_1 = sales_buffer[-1]
+        lag_7 = sales_buffer[-7] if len(sales_buffer) >= 7 else sales_buffer[0]
+        lag_14 = sales_buffer[-14] if len(sales_buffer) >= 14 else sales_buffer[0]
+        roll_7 = np.mean(sales_buffer[-7:])
+        roll_30 = np.mean(sales_buffer[-30:])
+        promo_lag = 0 if override_promo else future_promos[step - 1]
+        
+        feat_row.at[0, 'promotion_flag'] = 0
+        feat_row.at[0, 'day_of_week'] = day_of_week
+        feat_row.at[0, 'month'] = month
+        feat_row.at[0, 'is_weekend'] = is_weekend
+        feat_row.at[0, 'day_of_year'] = day_of_year
+        feat_row.at[0, 'units_sold_lag_1'] = lag_1
+        feat_row.at[0, 'units_sold_lag_7'] = lag_7
+        feat_row.at[0, 'units_sold_lag_14'] = lag_14
+        feat_row.at[0, 'units_sold_roll_mean_7'] = roll_7
+        feat_row.at[0, 'units_sold_roll_mean_30'] = roll_30
+        feat_row.at[0, 'promo_lag_1'] = int(promo_lag)
+        
+        pred_res = model.predict(feat_row, step=step)
+        pred_val = float(pred_res["predictions"][0])
+        predictions_sum += pred_val
+        sales_buffer.append(pred_val)
+        
+    return predictions_sum
+
+def explain_forecast_decomposition(product_id: str) -> dict:
+    """
+    Computes a causal mathematical decomposition of the future forecast values
+    to explain what portion is driven by:
+      1. Baseline History/Trend
+      2. Calendar Seasonality (Days of Week/Is Weekend)
+      3. Promotion flag impacts (inc. promotional hangover lag effects)
+    Calculated counterfactually in Python to prevent LLM hallucinations.
+    """
+    try:
+        df = get_loaded_df()
+        
+        # Load best model
+        best_meta = get_best_model_metadata(product_id)
+        if not best_meta:
+            return {"status": "error", "message": f"No models trained for product '{product_id}'."}
+            
+        model_name = best_meta["model_name"]
+        
+        # Get product aggregations
+        df_product = aggregate_to_product_level(df)
+        prod_df = df_product[df_product['product_id'] == product_id].copy()
+        
+        if model_name == "Prophet":
+            # Prophet returns components natively
+            model = load_model(product_id, model_name)
+            last_historic_date = prod_df['date'].max()
+            future_dates = [last_historic_date + timedelta(days=i) for i in range(1, 31)]
+            avg_price = float(prod_df.sort_values(by='date').tail(30)['price'].mean())
+            
+            future_df = pd.DataFrame({"date": future_dates, "price": avg_price, "promotion_flag": 0})
+            res_act = model.model.predict(future_df.rename(columns={'date': 'ds'}))
+            
+            trend_sum = float(res_act['trend'].sum())
+            weekly_sum = float(res_act['weekly'].sum()) if 'weekly' in res_act else 0.0
+            yearly_sum = float(res_act['yearly'].sum()) if 'yearly' in res_act else 0.0
+            total_pred = float(res_act['yhat'].sum())
+            
+            weekly_pct = (weekly_sum / max(1, total_pred)) * 100
+            yearly_pct = (yearly_sum / max(1, total_pred)) * 100
+            
+            promo_pct = 0.0 # No future promos by default
+            season_pct = max(0.0, min(100.0, weekly_pct + yearly_pct))
+            trend_pct = 100.0 - season_pct - promo_pct
+            
+            return {
+                "status": "success",
+                "metric_type": "forecast_decomposition",
+                "product_id": product_id,
+                "product_name": prod_df['product_name'].iloc[0],
+                "model_used": model_name,
+                "decomposition": {
+                    "baseline_trend_percent": round(trend_pct, 1),
+                    "weekly_seasonality_percent": round(season_pct, 1),
+                    "promotion_impact_percent": round(promo_pct, 1)
+                },
+                "total_forecasted_units": int(round(total_pred))
+            }
+            
+        else:
+            # ML Model Counterfactuals
+            model = load_model(product_id, model_name)
+            history_subset = prod_df.sort_values(by='date').tail(30).copy()
+            
+            sum_act = _run_ml_forecast_with_overrides(model, history_subset, override_promo=False, override_season=False)
+            if sum_act <= 0:
+                return {
+                    "status": "success",
+                    "metric_type": "forecast_decomposition",
+                    "product_id": product_id,
+                    "product_name": prod_df['product_name'].iloc[0],
+                    "model_used": model_name,
+                    "decomposition": {
+                        "baseline_trend_percent": 100.0,
+                        "weekly_seasonality_percent": 0.0,
+                        "promotion_impact_percent": 0.0
+                    },
+                    "total_forecasted_units": 0
+                }
+                
+            sum_nopromo = _run_ml_forecast_with_overrides(model, history_subset, override_promo=True, override_season=False)
+            sum_noseason = _run_ml_forecast_with_overrides(model, history_subset, override_promo=False, override_season=True)
+            
+            promo_impact = sum_act - sum_nopromo
+            season_impact = sum_act - sum_noseason
+            trend_impact = sum_act - promo_impact - season_impact
+            
+            promo_pct = (promo_impact / sum_act) * 100
+            season_pct = (season_impact / sum_act) * 100
+            trend_pct = (trend_impact / sum_act) * 100
+            
+            # Bound and clamp to prevent mathematical edge case skewing
+            promo_pct = max(-50.0, min(100.0, promo_pct))
+            season_pct = max(-50.0, min(100.0, season_pct))
+            
+            # Make sure it adds up to 100% exactly
+            trend_pct = 100.0 - promo_pct - season_pct
+            if trend_pct < 0:
+                trend_pct = 0.0
+                season_pct = 100.0 - promo_pct
+                
+            return {
+                "status": "success",
+                "metric_type": "forecast_decomposition",
+                "product_id": product_id,
+                "product_name": prod_df['product_name'].iloc[0],
+                "model_used": model_name,
+                "decomposition": {
+                    "baseline_trend_percent": round(trend_pct, 1),
+                    "weekly_seasonality_percent": round(season_pct, 1),
+                    "promotion_impact_percent": round(promo_pct, 1)
+                },
+                "total_forecasted_units": int(round(sum_act))
+            }
+    except Exception as e:
+        return {"status": "error", "message": f"Decomposition failed: {str(e)}"}
+
 def model_comparison(product_id: str) -> dict:
     """
     Retrieves metrics for all models fitted on a specific product,
@@ -227,9 +427,18 @@ def model_comparison(product_id: str) -> dict:
     
     comparison = []
     for m in all_models:
+        mae = m["metrics"].get("MAE", 0.0)
+        mape = m["metrics"].get("MAPE", 0.0)
+        r2 = m["metrics"].get("R2", 0.0)
+        
         comparison.append({
             "model_name": m["model_name"],
-            "metrics": m["metrics"]
+            "metrics": m["metrics"],
+            "human_friendly_explanation": {
+                "MAE": f"MAE of {mae} indicates that on average, this model's daily predictions deviate from actual sales by {mae} units.",
+                "MAPE": f"MAPE of {mape}% represents the average relative percentage deviation of predictions from actual sales volume.",
+                "R2": f"R² of {r2} indicates that this model explains {r2 * 100:.1f}% of the historical variance in demand (a negative value implies it performs worse than a simple historical mean baseline)."
+            }
         })
         
     return {
