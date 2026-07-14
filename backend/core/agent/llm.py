@@ -1,5 +1,6 @@
 import os
 import json
+import threading
 import httpx
 from dotenv import load_dotenv
 
@@ -19,6 +20,11 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 SESSIONS_DIR = os.path.join(BASE_DIR, "data", "sessions")
 os.makedirs(SESSIONS_DIR, exist_ok=True)
 
+# Guards each session file's read-modify-write cycle. RLock (not Lock) because
+# add_message_to_history() calls get_session_history() internally while already
+# holding the lock, and a plain Lock would deadlock on that re-entry.
+_session_lock = threading.RLock()
+
 def get_session_history(session_id: str) -> list:
     """
     Retrieves the short term memory history for a session ID.
@@ -28,11 +34,12 @@ def get_session_history(session_id: str) -> list:
     # Sanitize session_id to prevent directory traversal
     safe_session_id = "".join(c for c in session_id if c.isalnum() or c in ("-", "_"))
     file_path = os.path.join(SESSIONS_DIR, f"{safe_session_id}.json")
-    
+
     if os.path.exists(file_path):
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+            with _session_lock:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
         except Exception as e:
             import logging
             logger = logging.getLogger("insightforge")
@@ -42,22 +49,26 @@ def get_session_history(session_id: str) -> list:
 def add_message_to_history(session_id: str, role: str, content: str):
     """
     Adds a message to the session memory, maintaining the limit, and persists it.
+    Locked end-to-end (read + append + write) so two concurrent messages on the same
+    session_id (e.g. two browser tabs — the frontend hardcodes one session_id) can't
+    race and silently drop one of the messages.
     """
-    history = get_session_history(session_id)
-    history.append({"role": role, "content": content})
-    # Keep last 10 messages (5 user, 5 assistant)
-    if len(history) > 10:
-        history = history[-10:]
-        
-    safe_session_id = "".join(c for c in session_id if c.isalnum() or c in ("-", "_"))
-    file_path = os.path.join(SESSIONS_DIR, f"{safe_session_id}.json")
-    try:
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(history, f, indent=4)
-    except Exception as e:
-        import logging
-        logger = logging.getLogger("insightforge")
-        logger.error(f"Failed to save chat session history for {session_id}: {str(e)}", exc_info=True)
+    with _session_lock:
+        history = get_session_history(session_id)
+        history.append({"role": role, "content": content})
+        # Keep last 10 messages (5 user, 5 assistant)
+        if len(history) > 10:
+            history = history[-10:]
+
+        safe_session_id = "".join(c for c in session_id if c.isalnum() or c in ("-", "_"))
+        file_path = os.path.join(SESSIONS_DIR, f"{safe_session_id}.json")
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(history, f, indent=4)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("insightforge")
+            logger.error(f"Failed to save chat session history for {session_id}: {str(e)}", exc_info=True)
 
 async def call_llm(messages: list, require_json: bool = False) -> str:
     """

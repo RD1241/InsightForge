@@ -1,12 +1,11 @@
 import os
 import json
-import pandas as pd
 from datetime import datetime
 
 # Import LLM and Tools
 from core.agent.llm import call_llm, get_session_history, add_message_to_history
 import core.agent.tools as tools
-from core.forecasting.preprocessor import clean_dataset
+from routers.dataset import get_clean_df
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ACTIVE_DATASET_PATH = os.path.join(BASE_DIR, "data", "active_dataset.csv")
@@ -20,8 +19,7 @@ def get_product_lookup_str() -> str:
         return "No active dataset loaded."
         
     try:
-        df = pd.read_csv(ACTIVE_DATASET_PATH)
-        df_clean = clean_dataset(df)
+        df_clean = get_clean_df()
         unique_prods = df_clean[['product_id', 'product_name', 'category']].drop_duplicates()
         
         lookup_lines = []
@@ -45,8 +43,7 @@ def resolve_product_id(input_str: str) -> str:
         return input_str
         
     try:
-        df = pd.read_csv(ACTIVE_DATASET_PATH)
-        df_clean = clean_dataset(df)
+        df_clean = get_clean_df()
         df_unique = df_clean[['product_id', 'product_name']].drop_duplicates()
         
         # 1. Exact case-insensitive match on product_id

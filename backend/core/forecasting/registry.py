@@ -42,19 +42,33 @@ def get_recommendation_reason(model_name: str, metrics: dict) -> str:
         )
     return f"Recommended based on lowest MAE on the validation set."
 
-def save_model(product_id: str, model_name: str, model_obj, metrics: dict):
+def save_model_file(product_id: str, model_name: str, model_obj) -> tuple:
     """
-    Serializes a trained model to the models_store/ directory and updates the registry index.
+    Serializes a trained model to a pickle file in models_store/ only — does not
+    touch the registry JSON. Returns (filename, file_path).
     """
-    # 1. Save pickle file
     safe_model_name = model_name.replace(" ", "_").lower()
     filename = f"{product_id}_{safe_model_name}.pkl"
     file_path = os.path.join(MODELS_STORE_DIR, filename)
-    
+
     with open(file_path, "wb") as f:
         pickle.dump(model_obj, f)
-        
-    # 2. Update models_registry.json under thread lock to prevent concurrent write corruption
+
+    return filename, file_path
+
+
+def save_registry_batch(entries_by_product: dict):
+    """
+    Updates the registry index for multiple products' models in a single
+    read-modify-write cycle. `entries_by_product` maps
+    product_id -> {model_name: {"metrics": dict, "filename": str}}.
+
+    This is the one place that actually reads/writes REGISTRY_JSON_PATH — save_model()
+    and save_models_batch() both funnel through it. A full training run calls this once
+    for every product's models combined, instead of rewriting the (growing) registry file
+    once per model: at hundreds of products x 4 models, that's hundreds of full-file
+    read-modify-write cycles avoided.
+    """
     with _registry_lock:
         registry = {}
         if os.path.exists(REGISTRY_JSON_PATH):
@@ -63,21 +77,41 @@ def save_model(product_id: str, model_name: str, model_obj, metrics: dict):
                     registry = json.load(f)
             except Exception:
                 registry = {}
-                
-        if product_id not in registry:
-            registry[product_id] = {}
-            
-        registry[product_id][model_name] = {
-            "model_name": model_name,
-            "product_id": product_id,
-            "metrics": metrics,
-            "model_path": filename,  # Relative filename only to support workspace portability
-            "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        
+
+        trained_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for product_id, entries in entries_by_product.items():
+            if product_id not in registry:
+                registry[product_id] = {}
+            for model_name, info in entries.items():
+                registry[product_id][model_name] = {
+                    "model_name": model_name,
+                    "product_id": product_id,
+                    "metrics": info["metrics"],
+                    "model_path": info["filename"],  # Relative filename only to support workspace portability
+                    "trained_at": trained_at
+                }
+
         with open(REGISTRY_JSON_PATH, "w") as f:
             json.dump(registry, f, indent=4)
-            
+
+
+def save_models_batch(product_id: str, entries: dict):
+    """
+    Updates the registry index for one or more models of the same product in a
+    single read-modify-write cycle. `entries` maps model_name -> {"metrics": dict, "filename": str}.
+    """
+    save_registry_batch({product_id: entries})
+
+
+def save_model(product_id: str, model_name: str, model_obj, metrics: dict):
+    """
+    Serializes a trained model to the models_store/ directory and updates the registry index.
+    Kept for callers saving a single model in isolation. When saving several models for the
+    same product (e.g. during training), use save_model_file() + save_models_batch() instead
+    to avoid one full registry read-modify-write per model.
+    """
+    filename, file_path = save_model_file(product_id, model_name, model_obj)
+    save_models_batch(product_id, {model_name: {"metrics": metrics, "filename": filename}})
     return file_path
 
 _model_cache = {}
@@ -163,13 +197,19 @@ def get_best_model_metadata(product_id: str) -> dict:
     
     return best_model
 
+_training_report_lock = threading.Lock()
+
 def save_training_report(report_data: dict):
     """
     Persists a comprehensive training report for the AI Analyst to query.
+    Locked for the same reason as the model registry writes in save_registry_batch():
+    two overlapping /train calls (two tabs, a retry) could otherwise interleave their
+    writes to this file and corrupt or silently clobber it.
     """
-    with open(TRAINING_REPORT_PATH, "w") as f:
-        json.dump(report_data, f, indent=4)
-        
+    with _training_report_lock:
+        with open(TRAINING_REPORT_PATH, "w") as f:
+            json.dump(report_data, f, indent=4)
+
 def load_training_report() -> dict:
     """
     Loads the persistent training report summary.
@@ -177,8 +217,9 @@ def load_training_report() -> dict:
     if not os.path.exists(TRAINING_REPORT_PATH):
         return None
     try:
-        with open(TRAINING_REPORT_PATH, "r") as f:
-            return json.load(f)
+        with _training_report_lock:
+            with open(TRAINING_REPORT_PATH, "r") as f:
+                return json.load(f)
     except Exception as e:
         import logging
         logger = logging.getLogger("insightforge")

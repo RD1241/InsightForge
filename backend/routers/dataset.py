@@ -23,6 +23,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # In-memory status cache to avoid loading large CSVs repeatedly on status checks
 _cached_status = None
 _cached_df = None
+_cached_eda = None
 
 def get_active_df() -> pd.DataFrame:
     """
@@ -51,10 +52,11 @@ def clear_status_cache():
     """
     Clears the internal cache when a new dataset is active.
     """
-    global _cached_status, _cached_df, _cached_clean_df
+    global _cached_status, _cached_df, _cached_clean_df, _cached_eda
     _cached_status = None
     _cached_df = None
     _cached_clean_df = None
+    _cached_eda = None
 
 @router.post("/upload")
 async def upload_dataset(file: UploadFile = File(...)):
@@ -267,14 +269,21 @@ async def get_eda_report():
     """
     Performs EDA on the active dataset and returns statistics,
     seasonality data, correlation values, and outlier lists.
+    Cached in-memory (like /status) since EDA generation is the most expensive
+    read-only computation in the app and the underlying data only changes on
+    upload/demo-load/retrain, both of which clear this cache.
     """
+    global _cached_eda
     if not os.path.exists(ACTIVE_DATASET_PATH):
         raise HTTPException(status_code=404, detail="No active dataset found.")
-        
+
+    if _cached_eda is not None:
+        return _cached_eda
+
     try:
-        df = get_active_df()
-        df_clean = clean_dataset(df)
+        df_clean = get_clean_df()
         eda_data = generate_eda_report(df_clean)
+        _cached_eda = eda_data
         return eda_data
     except Exception as e:
         import logging

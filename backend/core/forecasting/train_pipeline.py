@@ -12,7 +12,7 @@ from core.forecasting.models import (
     evaluate_predictions, PROPHET_AVAILABLE
 )
 from core.forecasting.registry import (
-    save_model, save_training_report, get_best_model_metadata, 
+    save_model_file, save_registry_batch, save_training_report, get_best_model_metadata,
     load_model, get_product_models
 )
 
@@ -103,13 +103,18 @@ def _train_single_product(pid: str, df_features: pd.DataFrame, prophet_available
         
     y_test = test_df['units_sold'].values
     models_trained = {}
-    
+    # Staged registry entries for this product's 4 models — returned to the caller, which
+    # batches every product's entries into a single registry write for the whole run
+    # instead of one read-modify-write per model here.
+    registry_entries = {}
+
     # --- Model 1: Linear Regression ---
     lr_model = LinearRegressionModel()
     lr_model.fit(train_df)
     lr_preds = _recursive_validation_predict(lr_model, train_df, test_df)
     lr_metrics = evaluate_predictions(y_test, lr_preds)
-    save_model(pid, "Linear Regression", lr_model, lr_metrics)
+    lr_filename, _ = save_model_file(pid, "Linear Regression", lr_model)
+    registry_entries["Linear Regression"] = {"metrics": lr_metrics, "filename": lr_filename}
     models_trained["Linear Regression"] = lr_metrics
 
     # --- Model 2: Ridge Regression ---
@@ -117,7 +122,8 @@ def _train_single_product(pid: str, df_features: pd.DataFrame, prophet_available
     ridge_model.fit(train_df)
     ridge_preds = _recursive_validation_predict(ridge_model, train_df, test_df)
     ridge_metrics = evaluate_predictions(y_test, ridge_preds)
-    save_model(pid, "Ridge Regression", ridge_model, ridge_metrics)
+    ridge_filename, _ = save_model_file(pid, "Ridge Regression", ridge_model)
+    registry_entries["Ridge Regression"] = {"metrics": ridge_metrics, "filename": ridge_filename}
     models_trained["Ridge Regression"] = ridge_metrics
 
     # --- Model 3: Random Forest ---
@@ -125,7 +131,8 @@ def _train_single_product(pid: str, df_features: pd.DataFrame, prophet_available
     rf_model.fit(train_df)
     rf_preds = _recursive_validation_predict(rf_model, train_df, test_df)
     rf_metrics = evaluate_predictions(y_test, rf_preds)
-    save_model(pid, "Random Forest", rf_model, rf_metrics)
+    rf_filename, _ = save_model_file(pid, "Random Forest", rf_model)
+    registry_entries["Random Forest"] = {"metrics": rf_metrics, "filename": rf_filename}
     models_trained["Random Forest"] = rf_metrics
 
     # --- Model 4: Prophet (if available) ---
@@ -143,12 +150,13 @@ def _train_single_product(pid: str, df_features: pd.DataFrame, prophet_available
             prophet_res    = prophet_model.predict(test_df)
             prophet_preds  = prophet_res["predictions"]
             prophet_metrics = evaluate_predictions(y_test, prophet_preds)
-            save_model(pid, "Prophet", prophet_model, prophet_metrics)
+            prophet_filename, _ = save_model_file(pid, "Prophet", prophet_model)
+            registry_entries["Prophet"] = {"metrics": prophet_metrics, "filename": prophet_filename}
             models_trained["Prophet"] = prophet_metrics
         except Exception as e:
             # Fallback silently on compile errors
             print(f"Prophet failed to train for product {pid}: {str(e)}")
-            
+
     # --- Robust Model Recommendation Heuristics ---
     # Reject models with negative validation R2 unless all have R2 <= 0.
     valid_models = {m: metrics for m, metrics in models_trained.items() if metrics["R2"] > 0}
@@ -167,7 +175,7 @@ def _train_single_product(pid: str, df_features: pd.DataFrame, prophet_available
         "all_models": models_trained,
         "training_time_seconds": round(time.time() - product_start, 2)
     }
-    return pid, summary
+    return pid, summary, registry_entries
 
 def run_training_pipeline(df_raw: pd.DataFrame, smooth_outliers_flag: bool = True) -> dict:
     """
@@ -189,21 +197,28 @@ def run_training_pipeline(df_raw: pd.DataFrame, smooth_outliers_flag: bool = Tru
     
     unique_products = df_product['product_id'].unique()
     product_summaries = {}
-    
+    all_registry_entries = {}
+
     # Parallel training using ThreadPoolExecutor
     # Bypasses Python ProcessPool pickling issues on Windows while parallelizing Stan / C++ fits
     max_workers = min(len(unique_products), 4)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [
-            executor.submit(_train_single_product, pid, df_features, PROPHET_AVAILABLE) 
+            executor.submit(_train_single_product, pid, df_features, PROPHET_AVAILABLE)
             for pid in unique_products
         ]
         for fut in futures:
             res = fut.result()
             if res is not None:
-                pid, summary = res
+                pid, summary, registry_entries = res
                 product_summaries[pid] = summary
-        
+                all_registry_entries[pid] = registry_entries
+
+    # One registry read-modify-write for the entire training run, instead of once per
+    # product (or once per model) — see save_registry_batch() for why this matters at scale.
+    if all_registry_entries:
+        save_registry_batch(all_registry_entries)
+
     # Calculate average validation errors across all products
     avg_mae = np.mean([p["best_metrics"]["MAE"] for p in product_summaries.values()]) if product_summaries else 0.0
     avg_mape = np.mean([p["best_metrics"]["MAPE"] for p in product_summaries.values()]) if product_summaries else 0.0
@@ -222,15 +237,18 @@ def run_training_pipeline(df_raw: pd.DataFrame, smooth_outliers_flag: bool = Tru
     save_training_report(report)
     return report
 
-def generate_future_forecast(df_raw: pd.DataFrame, product_id: str, model_name: str = None, horizon_days: int = 30, price_multiplier: float = 1.0, promo_days: str = "") -> dict:
+def generate_future_forecast(df_clean: pd.DataFrame, product_id: str, model_name: str = None, horizon_days: int = 30, price_multiplier: float = 1.0, promo_days: str = "") -> dict:
     """
     Generates N-days out-of-sample future forecasts for a product.
     If model_name is None, loads the recommended best model from the registry.
     Uses recursive lag updating and step-dependent confidence cones for ML models.
     Supports What-If scenario overrides (price multiplier and promotion days) and clamps predictions to 0.
+
+    Expects df_clean to already be cleaned (i.e. the output of clean_dataset()) — callers should
+    pass the cached get_clean_df() result rather than a raw dataframe, so a forecast request doesn't
+    re-run the full cleaning pass on every call.
     """
-    df_clean = clean_dataset(df_raw)
-    
+
     # Retrieve product metadata from best model or registry
     best_meta = get_best_model_metadata(product_id)
     if not best_meta:

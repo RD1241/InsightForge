@@ -8,6 +8,7 @@ sys.path.append(backend_dir)
 
 from core.forecasting.train_pipeline import run_training_pipeline, generate_future_forecast
 from core.forecasting.registry import get_best_model_metadata, get_product_models
+from core.forecasting.preprocessor import clean_dataset
 
 def run_tests():
     print("=== InsightForge Forecasting Engine Verification ===")
@@ -60,7 +61,9 @@ def run_tests():
     
     # 4. Generate Future Forecast (Recursive vs. Prophet)
     print("\nStep 3: Generating 30-day future forecast for PRD_01 using best model...")
-    forecast_res = generate_future_forecast(df_raw, "PRD_01", horizon_days=30)
+    # generate_future_forecast() now expects an already-cleaned dataframe (matches the
+    # cached get_clean_df() callers use in the live app), not a raw one.
+    forecast_res = generate_future_forecast(clean_dataset(df_raw), "PRD_01", horizon_days=30)
     
     print(f"  - Product Name: {forecast_res['product_name']}")
     print(f"  - Model Used: {forecast_res['model_used']}")

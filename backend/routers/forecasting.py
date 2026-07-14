@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 # Standardize path imports
 from core.forecasting.train_pipeline import run_training_pipeline, generate_future_forecast
 from core.forecasting.registry import get_product_models, load_training_report, clear_model_cache
-from routers.dataset import get_active_df
+from routers.dataset import get_active_df, get_clean_df
 
 router = APIRouter(prefix="/api/forecast", tags=["Forecasting"])
 
@@ -73,9 +73,9 @@ async def predict_demand(
         
     try:
         def _blocking_forecast():
-            df_raw = get_active_df()
+            df_clean = get_clean_df()
             return generate_future_forecast(
-                df_raw, product_id, model_name, horizon_days, price_multiplier, promo_days
+                df_clean, product_id, model_name, horizon_days, price_multiplier, promo_days
             )
         forecast_res = await asyncio.to_thread(_blocking_forecast)
         return forecast_res
