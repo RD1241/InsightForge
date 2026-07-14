@@ -207,8 +207,8 @@ document.addEventListener("DOMContentLoaded", () => {
         trainingProgressFill: document.getElementById("training-progress-fill"),
         trainingProgressText: document.getElementById("training-progress-text"),
         forecastSummaryContainer: document.getElementById("forecast-summary-container"),
-        registryAvgMae: document.getElementById("registry-avg-mae"),
-        registryAvgMape: document.getElementById("registry-avg-mape"),
+        registryAvgMae: document.getElementById("registry-avg-mae") || null,
+        registryAvgMape: document.getElementById("registry-avg-mape") || null,
         forecastWorkspace: document.getElementById("forecast-workspace"),
         forecastProductSelect: document.getElementById("forecast-product-select"),
         forecastModelSelect: document.getElementById("forecast-model-select"),
@@ -891,7 +891,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 });
             } else if (pageId === "forecasting") {
-                const plotEl = document.getElementById("forecast-plot");
+                const plotEl = document.getElementById("chart-forecast");
                 if (plotEl && plotEl.classList.contains("js-plotly-plot")) {
                     Plotly.Plots.resize(plotEl);
                 }
@@ -1406,8 +1406,8 @@ document.addEventListener("DOMContentLoaded", () => {
         state.trainedReport = report;
         
         // Header summary cards
-        el.registryAvgMae.textContent = report.average_mae.toFixed(2);
-        el.registryAvgMape.textContent = `${report.average_mape.toFixed(2)}%`;
+        if (el.registryAvgMae) el.registryAvgMae.textContent = report.average_mae.toFixed(2);
+        if (el.registryAvgMape) el.registryAvgMape.textContent = `${report.average_mape.toFixed(2)}%`;
         el.forecastSummaryContainer.classList.remove("hidden");
         
         // Populate product selector dropdown
