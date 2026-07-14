@@ -392,19 +392,58 @@
                         </div>
                     </div>
 
-                    <!-- Forecast Summary Overview (Hidden until trained) -->
-                    <div class="grid grid-3 mt-6 hidden" id="forecast-summary-container">
-                        <div class="stat-box card glassmorphic">
-                            <span class="stat-label">Model Registry Status</span>
-                            <span class="stat-value success-color" id="registry-status">OPTIMIZED</span>
+                    <!-- Business Health Executive Summary Board (Hidden until trained) -->
+                    <div class="flex-col gap-4 mt-6 hidden" id="forecast-summary-container">
+                        <!-- What should you do next? AI Action Plan Banner -->
+                        <div class="card glassmorphic border-pulse" id="exec-recommendation-banner" style="background: rgba(16, 185, 129, 0.03); border: 1.5px solid rgba(16, 185, 129, 0.2); padding: 1.25rem;">
+                            <div class="flex-row justify-between align-center wrap gap-4">
+                                <div class="flex-row align-center gap-3">
+                                    <div class="badge badge-success" style="padding: 6px 12px; font-size: 0.72rem; border-radius: 4px; font-weight: 700; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3);">AI ACTION PLAN</div>
+                                    <div>
+                                        <h4 class="text-sm font-semibold text-primary" style="margin: 0; font-size: 0.9rem; font-weight: 600;">What should you do next?</h4>
+                                        <p class="text-xs text-secondary mt-1" id="exec-action-text" style="margin: 0; font-size: 0.78rem;">Select a product to view the automated action recommendation...</p>
+                                    </div>
+                                </div>
+                                <div class="flex-row gap-2">
+                                    <button class="btn btn-secondary btn-xs" id="exec-action-ack-btn" style="padding: 5px 12px; font-size: 0.72rem;">
+                                        <i data-lucide="check" class="inline-icon" style="width: 12px; height: 12px; vertical-align: middle; margin-right: 4px;"></i> Acknowledge
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="stat-box card glassmorphic">
-                            <span class="stat-label">Average Validation MAE</span>
-                            <span class="stat-value" id="registry-avg-mae">0.00</span>
-                        </div>
-                        <div class="stat-box card glassmorphic">
-                            <span class="stat-label">Average MAPE (Error Rate)</span>
-                            <span class="stat-value" id="registry-avg-mape">0.00%</span>
+
+                        <!-- 6 Business Cards Grid -->
+                        <div class="grid grid-6" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem;">
+                            <!-- 1. Demand Outlook -->
+                            <div class="stat-box card glassmorphic text-center" style="padding: 1rem 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90px;">
+                                <span class="stat-label" style="font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8; font-weight: 600;">Demand Outlook</span>
+                                <span class="stat-value text-primary mt-2 block" id="exec-demand-outlook" style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">-</span>
+                            </div>
+                            <!-- 2. Projected Revenue -->
+                            <div class="stat-box card glassmorphic text-center" style="padding: 1rem 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90px;">
+                                <span class="stat-label" style="font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8; font-weight: 600;">Projected Revenue</span>
+                                <span class="stat-value text-primary mt-2 block" id="exec-projected-revenue" style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">-</span>
+                            </div>
+                            <!-- 3. Inventory Status -->
+                            <div class="stat-box card glassmorphic text-center" style="padding: 1rem 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90px;">
+                                <span class="stat-label" style="font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8; font-weight: 600;">Inventory Status</span>
+                                <span class="stat-value mt-2 block" id="exec-inventory-status" style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">-</span>
+                            </div>
+                            <!-- 4. Potential Revenue Loss -->
+                            <div class="stat-box card glassmorphic text-center" style="padding: 1rem 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90px;">
+                                <span class="stat-label" style="font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8; font-weight: 600;">Lost Revenue Risk</span>
+                                <span class="stat-value mt-2 block" id="exec-revenue-loss" style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">-</span>
+                            </div>
+                            <!-- 5. Prediction Accuracy -->
+                            <div class="stat-box card glassmorphic text-center" style="padding: 1rem 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90px;">
+                                <span class="stat-label" style="font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8; font-weight: 600;">Forecast Accuracy</span>
+                                <span class="stat-value text-primary mt-2 block" id="exec-prediction-accuracy" style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">-</span>
+                            </div>
+                            <!-- 6. Forecast Reliability -->
+                            <div class="stat-box card glassmorphic text-center" style="padding: 1rem 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90px;">
+                                <span class="stat-label" style="font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8; font-weight: 600;">Forecast Reliability</span>
+                                <span class="stat-value text-primary mt-2 block" id="exec-forecast-reliability" style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">-</span>
+                            </div>
                         </div>
                     </div>
 
@@ -539,88 +578,90 @@
                         
                         <!-- Forecasting Right: Model Metrics & Info -->
                         <div class="flex-col gap-6">
-                            <!-- Recommendation Card -->
-                            <div class="card glassmorphic border-pulse">
-                                <div class="card-header">
-                                    <div class="flex-row align-center gap-2">
-                                        <i data-lucide="award" class="success-color"></i>
-                                        <h3>Best Model Recommender</h3>
-                                    </div>
-                                </div>
-                                <div class="card-body">
-                                    <div class="best-model-badge" id="recommender-model-name">Prophet</div>
-                                    <div class="recommendation-explanation mt-4">
-                                        <p class="text-sm text-secondary leading-relaxed" id="recommender-reason-text">Prophet is recommended due to lowest Mean Absolute Error.</p>
-                                    </div>
-                                </div>
-                            </div>
+                             <!-- AI Recommendation Card -->
+                             <div class="card glassmorphic border-pulse">
+                                 <div class="card-header">
+                                     <div class="flex-row align-center gap-2">
+                                         <i data-lucide="award" class="success-color"></i>
+                                         <h3>AI Recommendation</h3>
+                                     </div>
+                                 </div>
+                                 <div class="card-body">
+                                     <div class="best-model-badge" id="recommender-model-name">Prophet</div>
+                                     <div class="recommendation-explanation mt-4">
+                                         <p class="text-sm text-secondary leading-relaxed" id="recommender-reason-text">Prophet is recommended due to lowest Mean Absolute Error.</p>
+                                     </div>
+                                 </div>
+                             </div>
 
-                            <!-- Decision Support Panel -->
-                            <div class="card glassmorphic border-pulse" id="decision-support-card">
-                                <div class="card-header flex-row align-center gap-2">
-                                    <i data-lucide="shield-alert" class="accent-color"></i>
-                                    <h3>Inventory Decision Support</h3>
-                                </div>
-                                <div class="card-body flex-col gap-4">
-                                    <!-- Stock Status Row -->
-                                    <div class="flex-row justify-between align-center">
-                                        <span class="text-xs text-secondary font-semibold">Safety Stock Health:</span>
-                                        <span class="rating-badge rating-excellent text-xs font-semibold" id="decision-stock-status">HEALTHY</span>
-                                    </div>
+                             <!-- What should you do next? Panel -->
+                             <div class="card glassmorphic border-pulse" id="decision-support-card">
+                                 <div class="card-header flex-row align-center gap-2">
+                                     <i data-lucide="shield-alert" class="accent-color"></i>
+                                     <h3>What should you do next?</h3>
+                                 </div>
+                                 <div class="card-body flex-col gap-4">
+                                     <!-- Stock Status Row -->
+                                     <div class="flex-row justify-between align-center">
+                                         <span class="text-xs text-secondary font-semibold">Safety Stock Health:</span>
+                                         <span class="rating-badge rating-excellent text-xs font-semibold" id="decision-stock-status">HEALTHY</span>
+                                     </div>
 
-                                    <!-- Reorder Recommendation details -->
-                                    <div class="flex-col gap-1" style="background: rgba(255,255,255,0.02); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
-                                        <span class="text-xs font-semibold text-primary">Replenishment Action:</span>
-                                        <p class="text-xs text-secondary leading-relaxed mt-1" id="decision-action-text">No immediate reorder necessary.</p>
-                                    </div>
+                                     <!-- Reorder Recommendation details -->
+                                     <div class="flex-col gap-1" style="background: rgba(255,255,255,0.02); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                                         <span class="text-xs font-semibold text-primary">Replenishment Action:</span>
+                                         <p class="text-xs text-secondary leading-relaxed mt-1" id="decision-action-text">No immediate reorder necessary.</p>
+                                     </div>
 
-                                    <!-- Financial Risk Metrics -->
-                                    <div class="grid grid-2 gap-2 text-xs">
-                                        <div class="flex-col gap-0.5" style="background: rgba(255,255,255,0.01); padding: 6px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.03);">
-                                            <span class="text-secondary text-2xs block">Projected Stockouts</span>
-                                            <span class="font-semibold text-primary mt-1 block" id="decision-stockout-days">0 Days</span>
-                                        </div>
-                                        <div class="flex-col gap-0.5" style="background: rgba(255,255,255,0.01); padding: 6px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.03);">
-                                            <span class="text-secondary text-2xs block">Revenue at Risk</span>
-                                            <span class="font-semibold text-primary mt-1 block" id="decision-revenue-risk">₹0.00</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                     <!-- Financial Risk Metrics -->
+                                     <div class="grid grid-2 gap-2 text-xs">
+                                         <div class="flex-col gap-0.5" style="background: rgba(255,255,255,0.01); padding: 6px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.03);">
+                                             <span class="text-secondary text-2xs block">Projected Stockouts</span>
+                                             <span class="font-semibold text-primary mt-1 block" id="decision-stockout-days">0 Days</span>
+                                         </div>
+                                         <div class="flex-col gap-0.5" style="background: rgba(255,255,255,0.01); padding: 6px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.03);">
+                                             <span class="text-secondary text-2xs block">Revenue at Risk</span>
+                                             <span class="font-semibold text-primary mt-1 block" id="decision-revenue-risk">₹0.00</span>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
 
-                            <!-- Metrics Comparison Table Card -->
-                            <div class="card glassmorphic">
-                                <div class="card-header">
-                                    <h3>Model Comparison</h3>
-                                </div>
-                                <div class="card-body">
-                                    <table class="data-table text-sm" id="metrics-compare-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Model</th>
-                                                <th class="metric-header-info" data-metric="MAE" style="cursor: pointer; text-decoration: underline dotted var(--secondary-color);">MAE <i data-lucide="info" class="inline-icon" style="width: 12px; height: 12px; vertical-align: middle;"></i></th>
-                                                <th class="metric-header-info" data-metric="MAPE" style="cursor: pointer; text-decoration: underline dotted var(--secondary-color);">MAPE <i data-lucide="info" class="inline-icon" style="width: 12px; height: 12px; vertical-align: middle;"></i></th>
-                                                <th class="metric-header-info" data-metric="R2" style="cursor: pointer; text-decoration: underline dotted var(--secondary-color);">R² <i data-lucide="info" class="inline-icon" style="width: 12px; height: 12px; vertical-align: middle;"></i></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <!-- Dynamic models comparison -->
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            
-                            <!-- Explanation Alert Box -->
-                            <div class="card glassmorphic bg-dark-slate">
-                                <div class="card-body text-xs leading-relaxed text-secondary">
-                                    <strong class="text-primary block mb-1">Time Series Metrics Quick Guide:</strong>
-                                    <ul class="bullets-list">
-                                        <li><strong>MAE (Mean Absolute Error):</strong> Represents the average units deviation in predictions. Lower is better.</li>
-                                        <li><strong>MAPE (Mean Absolute % Error):</strong> Standard percentage discrepancy. An error rate of 10% or less represents high forecasting accuracy.</li>
-                                        <li><strong>R² (R-squared):</strong> Explains validation variance fit. 1.0 is a perfect fit, closer to 1.0 is better.</li>
-                                    </ul>
-                                </div>
-                            </div>
+                             <!-- Technical Metrics Table (Progressive Disclosure) -->
+                             <div class="card glassmorphic">
+                                 <details class="technical-details-disclosure" style="width: 100%;">
+                                     <summary class="cursor-pointer text-xs font-semibold text-secondary flex-row justify-between align-center" style="user-select: none; outline: none; list-style: none; display: flex;">
+                                         <span class="flex-row align-center gap-2">
+                                             <i data-lucide="settings" style="width:14px;height:14px;color:var(--accent);"></i>
+                                             <strong>Technical Details (For Academic Review)</strong>
+                                         </span>
+                                         <span class="accent-color text-2xs" style="text-decoration: underline;">Toggle Metrics</span>
+                                     </summary>
+                                     <div class="mt-4" style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px;">
+                                         <table class="data-table text-sm" id="metrics-compare-table">
+                                             <thead>
+                                                 <tr>
+                                                     <th>Model</th>
+                                                     <th class="metric-header-info" data-metric="MAE" style="cursor: pointer; text-decoration: underline dotted var(--secondary-color);">MAE <i data-lucide="info" class="inline-icon" style="width: 12px; height: 12px; vertical-align: middle;"></i></th>
+                                                     <th class="metric-header-info" data-metric="MAPE" style="cursor: pointer; text-decoration: underline dotted var(--secondary-color);">MAPE <i data-lucide="info" class="inline-icon" style="width: 12px; height: 12px; vertical-align: middle;"></i></th>
+                                                     <th class="metric-header-info" data-metric="R2" style="cursor: pointer; text-decoration: underline dotted var(--secondary-color);">R² <i data-lucide="info" class="inline-icon" style="width: 12px; height: 12px; vertical-align: middle;"></i></th>
+                                                 </tr>
+                                             </thead>
+                                             <tbody>
+                                                 <!-- Dynamic models comparison -->
+                                             </tbody>
+                                         </table>
+                                         <div class="mt-4 text-xs leading-relaxed text-secondary" style="background: rgba(0,0,0,0.15); padding: 8px 12px; border-radius: 4px;">
+                                             <strong class="text-primary block mb-1">Metrics Guide:</strong>
+                                             <ul class="bullets-list" style="margin-left: 12px; list-style-type: disc;">
+                                                 <li><strong>MAE (Mean Absolute Error):</strong> Average unit deviation in predictions.</li>
+                                                 <li><strong>MAPE:</strong> Percentage error rate (under 10% is excellent).</li>
+                                                 <li><strong>R²:</strong> Explains variance fit (closer to 1.0 is better).</li>
+                                             </ul>
+                                         </div>
+                                     </div>
+                                 </details>
+                             </div>
                         </div>
                     </div>
 

@@ -1396,24 +1396,25 @@ document.addEventListener("DOMContentLoaded", () => {
         updateScenarioHistoryTable();
         
         const models = Object.keys(prodData.all_models);
-        let modelOptions = `<option value="best_recommender">Best recommended: ${escapeHtml(prodData.best_model)}</option>`;
+        let modelOptions = `<option value="best_recommender">★ Best recommended: ${escapeHtml(getModelFriendlyLabel(prodData.best_model))}</option>`;
         models.forEach(m => {
-            modelOptions += `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`;
+            modelOptions += `<option value="${escapeHtml(m)}">${escapeHtml(getModelFriendlyLabel(m))}</option>`;
         });
         el.forecastModelSelect.innerHTML = modelOptions;
         state.activeModel = null; // defaults to best recommender
         
         // 2. Populate recommended badge & reason
-        el.recommenderModelName.textContent = prodData.best_model;
+        el.recommenderModelName.textContent = getModelFriendlyLabel(prodData.best_model);
         
         // 3. Populate comparison table
         let compareHtml = "";
         models.forEach(m => {
             const mData = prodData.all_models[m];
             const isBest = m === prodData.best_model;
+            const friendlyName = getModelFriendlyLabel(m, isBest);
             compareHtml += `
                 <tr class="${isBest ? 'border-pulse' : ''}">
-                    <td>${escapeHtml(m)} ${isBest ? '<i data-lucide="award" class="success-color inline-icon" style="width:14px;height:14px;vertical-align:middle;margin-left:4px;"></i>' : ''}</td>
+                    <td><strong>${escapeHtml(friendlyName)}</strong></td>
                     <td><strong>${escapeHtml(mData.MAE)}</strong></td>
                     <td>${escapeHtml(mData.MAPE)}%</td>
                     <td>${escapeHtml(mData.R2)}</td>
@@ -1517,33 +1518,105 @@ document.addEventListener("DOMContentLoaded", () => {
                 el.simRevenueDelta.innerHTML = `<span class="text-secondary italic">Baseline (₹${baseRevenue.toFixed(2)})</span>`;
             }
             
-            // 4. Render Decision Support Panel based on backend calculated calculations
+            // 4. Render Decision Support Panel and Executive Summary Board
             const ds = data.decision_support;
             if (ds) {
                 let badgeClass = "rating-excellent";
                 let statusText = "HEALTHY";
+                let execInventoryHtml = `<span class="success-color font-semibold">✓ Healthy</span>`;
+                
                 if (ds.status === "OUT_OF_STOCK") {
                     badgeClass = "rating-poor";
                     statusText = "OUT OF STOCK";
+                    execInventoryHtml = `<span class="danger-color font-semibold">❌ Out of Stock</span>`;
                 } else if (ds.status === "CRITICAL_LOW") {
                     badgeClass = "rating-poor";
                     statusText = "CRITICAL LOW";
+                    execInventoryHtml = `<span class="danger-color font-semibold">⚠️ Critical Low</span>`;
                 } else if (ds.status === "LOW_STOCK") {
                     badgeClass = "rating-good";
                     statusText = "LOW STOCK";
+                    execInventoryHtml = `<span class="warning-color font-semibold">⚠️ Low Stock</span>`;
                 }
                 
                 el.decisionStockStatus.className = `rating-badge ${badgeClass} text-xs font-semibold`;
                 el.decisionStockStatus.textContent = statusText;
                 
+                let recommendationActionHtml = "";
                 if (ds.reorder_date) {
-                    el.decisionActionText.innerHTML = `Order <strong class="accent-color">${ds.recommended_reorder_qty} units</strong> on <strong>${ds.reorder_date}</strong> to maintain target stock levels (7-day safety buffer).`;
+                    recommendationActionHtml = `Order <strong class="accent-color">${ds.recommended_reorder_qty} units</strong> on <strong>${ds.reorder_date}</strong> to maintain target stock levels (7-day safety buffer).`;
                 } else {
-                    el.decisionActionText.textContent = "No immediate replenishment required. Stock levels are expected to remain safe for the next 30 days.";
+                    recommendationActionHtml = "No immediate replenishment required. Stock levels are expected to remain safe for the next 30 days.";
                 }
+                el.decisionActionText.innerHTML = recommendationActionHtml;
                 
                 el.decisionStockoutDays.textContent = `${ds.stockout_days_projected} Day${ds.stockout_days_projected === 1 ? '' : 's'}`;
                 el.decisionRevenueRisk.textContent = `₹${ds.revenue_at_risk.toFixed(2)}`;
+
+                // Update the Executive Summary Board elements
+                el.forecastSummaryContainer.classList.remove("hidden");
+                
+                // A. AI Action Plan Alert Text
+                if (ds.reorder_date) {
+                    document.getElementById("exec-action-text").innerHTML = `AI recommends ordering <strong class="accent-color" style="color: var(--accent); font-weight: 700;">${ds.recommended_reorder_qty} units</strong> of ${data.product_name} on <strong style="color: var(--text-primary); font-weight: 700;">${ds.reorder_date}</strong> to prevent projected stockouts.`;
+                } else {
+                    document.getElementById("exec-action-text").innerHTML = `Inventory status is stable for ${data.product_name}. No immediate restocking required.`;
+                }
+
+                // B. Demand Outlook calculation
+                const firstPred = simPredictions[0];
+                const lastPred = simPredictions[simPredictions.length - 1];
+                const changePct = firstPred > 0 ? ((lastPred - firstPred) / firstPred * 100) : 0;
+                let demandOutlookText = "➡️ Stable";
+                if (changePct >= 5) {
+                    demandOutlookText = `📈 Growing (+${changePct.toFixed(0)}%)`;
+                } else if (changePct <= -5) {
+                    demandOutlookText = `📉 Declining (${changePct.toFixed(0)}%)`;
+                }
+                document.getElementById("exec-demand-outlook").textContent = demandOutlookText;
+
+                // C. Projected Revenue
+                document.getElementById("exec-projected-revenue").textContent = `₹${simRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+                // D. Inventory Status HTML
+                document.getElementById("exec-inventory-status").innerHTML = execInventoryHtml;
+
+                // E. Lost Revenue Risk
+                document.getElementById("exec-revenue-loss").textContent = `₹${ds.revenue_at_risk.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+                // F. Prediction Accuracy (MAPE derived)
+                const activeModelName = data.model_used;
+                let mape = (data.metrics && data.metrics.MAPE) ? data.metrics.MAPE : 0;
+                
+                // Try to find the exact model metrics from the active product's trained models list
+                if (state.trainedReport && state.trainedReport.products && state.trainedReport.products[productId]) {
+                    const modelData = state.trainedReport.products[productId].all_models[activeModelName];
+                    if (modelData && modelData.MAPE) mape = modelData.MAPE;
+                }
+                const accuracyPct = `${(100 - mape).toFixed(1)}%`;
+                document.getElementById("exec-prediction-accuracy").textContent = accuracyPct;
+
+                // G. Forecast Reliability (R2 derived)
+                let r2 = (data.metrics && data.metrics.R2) ? data.metrics.R2 : 0;
+                if (state.trainedReport && state.trainedReport.products && state.trainedReport.products[productId]) {
+                    const modelData = state.trainedReport.products[productId].all_models[activeModelName];
+                    if (modelData && modelData.R2) r2 = modelData.R2;
+                }
+                let reliabilityText = "Fair";
+                if (r2 >= 0.90) reliabilityText = "⭐⭐⭐⭐⭐ Excellent";
+                else if (r2 >= 0.80) reliabilityText = "⭐⭐⭐⭐☆ Very Good";
+                else if (r2 >= 0.70) reliabilityText = "⭐⭐⭐☆☆ Good";
+                else if (r2 >= 0.50) reliabilityText = "⭐⭐☆☆☆ Fair";
+                else reliabilityText = "⭐☆☆☆☆ Low";
+                document.getElementById("exec-forecast-reliability").textContent = reliabilityText;
+
+                // Bind Acknowledge button
+                const ackBtn = document.getElementById("exec-action-ack-btn");
+                if (ackBtn) {
+                    ackBtn.onclick = () => {
+                        showToast("AI Action Plan acknowledged. Replenishment tasks logged.", "success");
+                    };
+                }
             }
             
             // 5. Store current scenario metrics temporarily
@@ -2202,6 +2275,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 btnSpan.textContent = originalText;
             });
         });
+    }
+
+    // Map model names to clear, business-friendly engine titles
+    function getModelFriendlyLabel(modelName, isRecommended = false) {
+        const recommendedPrefix = isRecommended ? "★ " : "";
+        if (modelName === "Prophet") {
+            return recommendedPrefix + "Forecast Engine (Facebook Prophet)";
+        } else if (modelName === "Random Forest") {
+            return recommendedPrefix + "Tree Ensemble Engine (Random Forest)";
+        } else if (modelName === "Ridge") {
+            return recommendedPrefix + "Regularized Trend Engine (Ridge)";
+        } else if (modelName === "LinearRegression") {
+            return recommendedPrefix + "Simple Baseline Engine (Linear Regression)";
+        }
+        return recommendedPrefix + modelName;
     }
 
     // Run startup status check

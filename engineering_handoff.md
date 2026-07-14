@@ -787,6 +787,12 @@ Version 3.0 redesigns the complete user experience around the **30-second rule**
 - **Key Sales Drivers & Influences**: Renamed the correlation matrix card and implemented a dynamic **AI Driver Analysis** text card that parses price elasticity, promotional peaks, and weekend traffic correlations into plain language.
 - **Inline AI Observation Cards**: Added observations below all EDA trendlines and seasonality charts answering: *What happened?*, *Why?*, and *Recommended Action*.
 
+### 15.2 Phase 3.2: Forecast Page & Executive Summaries
+- **Business Health Executive Summary Board**: Shows expected revenue, stockout days, revenue risk, prediction accuracy ($(100 - \text{MAPE})\%$), and qualitative forecast reliability (derived from $R^2$) before any charts are drawn.
+- **AI Action Plan Alert**: Prominently highlights simulated replenishment reorder recommendations at the top of the forecasting page.
+- **Progressive Disclosure Details**: Encapsulated standard validation tables (MAE, MAPE, R²) inside collapsible HTML `<details>` blocks.
+- **Model Engine Branding**: Relabeled models with intuitive descriptive prefixes (e.g. `★ Forecast Engine (Facebook Prophet)`).
+
 ---
 
 *This document was generated as the final engineering handoff for InsightForge v3.0.0 following the Version 3.0 development and redesign phases.*
