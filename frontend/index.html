@@ -39,11 +39,11 @@
                 </a>
                 <a href="#" class="menu-item disabled" id="nav-eda" data-page="eda">
                     <i data-lucide="pie-chart"></i>
-                    <span>Exploratory EDA</span>
+                    <span>Sales Insights</span>
                 </a>
                 <a href="#" class="menu-item disabled" id="nav-forecast" data-page="forecasting">
                     <i data-lucide="trending-up"></i>
-                    <span>Forecast Engine</span>
+                    <span>AI Recommendation & Forecasts</span>
                 </a>
             </nav>
             
@@ -100,6 +100,11 @@
                                     <i data-lucide="file-spreadsheet" class="upload-icon"></i>
                                     <p class="dropzone-text">Drag & drop your CSV file here or <span class="accent-color cursor-pointer">browse</span></p>
                                     <span class="file-info" id="selected-file-info"></span>
+                                </div>
+                                <div style="margin-top: 1rem; text-align: center;">
+                                    <a href="http://127.0.0.1:8000/api/dataset/template" download class="btn btn-secondary btn-xs" id="download-template-link" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 0.7rem; border-radius: 4px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">
+                                        <i data-lucide="download" style="width: 12px; height: 12px; vertical-align: middle;"></i> Download Sample CSV Template
+                                    </a>
                                 </div>
                             </div>
                         </div>
@@ -203,7 +208,7 @@
                     <div class="stats-overview-grid">
                         <div class="stat-box card glassmorphic">
                             <span class="stat-label">Average Unit Price</span>
-                            <span class="stat-value" id="eda-avg-price">$0.00</span>
+                            <span class="stat-value" id="eda-avg-price">₹0.00</span>
                         </div>
                         <div class="stat-box card glassmorphic">
                             <span class="stat-label">Average Daily Sales Volume</span>
@@ -336,7 +341,7 @@
                                         <th>Product ID</th>
                                         <th>Product Name</th>
                                         <th>Units Sold</th>
-                                        <th>Outlier Range Threshold</th>
+                                        <th>Normal Demand Bounds</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -359,7 +364,7 @@
                             <div class="flex-row align-center gap-4 wrap">
                                 <div class="form-check flex-row align-center gap-2" style="margin-right: 1rem;">
                                     <input type="checkbox" id="smooth-outliers-check" class="form-checkbox" checked style="width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;">
-                                    <label for="smooth-outliers-check" class="text-sm text-secondary cursor-pointer" style="cursor: pointer; user-select: none;">MAD Outlier Smoothing (Recommended)</label>
+                                    <label for="smooth-outliers-check" class="text-sm text-secondary cursor-pointer" style="cursor: pointer; user-select: none;">Clean up Unusual Sales Spikes (Recommended)</label>
                                 </div>
                                 <div class="flex-row gap-2">
                                     <button class="btn btn-secondary" id="open-learning-btn">

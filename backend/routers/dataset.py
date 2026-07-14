@@ -281,3 +281,16 @@ async def get_eda_report():
         logger = logging.getLogger("insightforge")
         logger.error(f"Failed to generate EDA report: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate EDA report. Please try again.")
+
+from fastapi.responses import StreamingResponse
+import io
+
+@router.get("/template")
+async def get_csv_template():
+    # Return a simple CSV template with headers date, store, item, sales
+    csv_data = "date,store,item,sales\n2025-01-01,1,PRD_01,100\n2025-01-02,1,PRD_01,110\n"
+    return StreamingResponse(
+        io.StringIO(csv_data),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=insightforge_template.csv"}
+    )

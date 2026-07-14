@@ -624,7 +624,7 @@ a {
     right: calc(-1 * var(--chat-width)); /* Start offscreen */
     width: var(--chat-width);
     height: 100%;
-    background-color: rgba(15, 23, 42, 0.98);
+    background-color: rgba(15, 23, 42, 0.8);
     backdrop-filter: blur(20px);
     border-left: 1px solid var(--border-color);
     display: flex;
@@ -856,8 +856,10 @@ a {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(15, 23, 42, 0.85);
-    backdrop-filter: blur(4px);
+    background: linear-gradient(110deg, rgba(15, 23, 42, 0.8) 8%, rgba(30, 41, 59, 0.85) 18%, rgba(15, 23, 42, 0.8) 33%);
+    background-size: 200% 100%;
+    animation: shine 1.5s infinite linear;
+    backdrop-filter: blur(8px);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -868,30 +870,47 @@ a {
     border-radius: 8px;
 }
 
+@keyframes shine {
+    to {
+        background-position-x: -200%;
+    }
+}
+
 .chart-loader.hidden {
     opacity: 0;
     pointer-events: none;
 }
 
-/* Spinner Animation */
+/* Spinner Animation (Replaced with skeleton bar-chart mockup) */
 .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid rgba(255, 255, 255, 0.1);
-    border-radius: 50%;
-    border-top-color: var(--accent);
-    animation: spin 1s linear infinite;
+    display: none !important;
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+.chart-loader::before {
+    content: "";
+    display: block;
+    width: 140px;
+    height: 70px;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(0deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.06) 100%);
+    clip-path: polygon(
+        0% 100%, 12% 100%, 12% 60%, 20% 60%, 20% 100%,
+        28% 100%, 28% 40%, 36% 40%, 36% 100%,
+        44% 100%, 44% 80%, 52% 80%, 52% 100%,
+        60% 100%, 60% 30%, 68% 30%, 68% 100%,
+        76% 100%, 76% 50%, 84% 50%, 84% 100%,
+        92% 100%, 92% 70%, 100% 70%, 100% 100%
+    );
+    border-radius: 2px;
+    opacity: 0.4;
+    animation: pulse-shimmer 1.5s infinite ease-in-out;
 }
 
 .chart-loader span {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
     font-weight: 500;
+    letter-spacing: 0.2px;
 }
 
 /* Interactive Card Elevations & Hover scaling */
@@ -1195,7 +1214,7 @@ a {
 }
 
 .offline-card {
-    background: var(--card-bg);
+    background: var(--bg-card);
     border: 1px solid rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(20px);
     border-radius: 16px;
@@ -1216,7 +1235,7 @@ a {
     right: calc(-1 * var(--chat-width)); /* Start offscreen */
     width: var(--chat-width);
     height: 100%;
-    background-color: rgba(15, 23, 42, 0.98);
+    background-color: rgba(15, 23, 42, 0.8);
     backdrop-filter: blur(20px);
     border-left: 1px solid var(--border-color);
     display: flex;
@@ -1504,5 +1523,54 @@ a {
     background: rgba(255, 255, 255, 0.08) !important;
     border-color: rgba(255, 255, 255, 0.2) !important;
     transform: translateY(-1px);
+}
+
+/* Extra-small screens: collapse executive board cards to single column */
+@media (max-width: 480px) {
+    .grid-6 {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Mobile responsive layout overrides: hide fixed sidebar, adjust page padding */
+@media (max-width: 768px) {
+    .sidebar {
+        display: none !important; /* Hide fixed sidebar on mobile */
+    }
+    .content-container {
+        padding: 1rem !important; /* Reduce padding from 2rem to 1rem */
+    }
+    .chat-panel, .learning-panel {
+        width: 100% !important; /* Take full viewport width on mobile */
+        right: -100% !important;
+    }
+    .chat-panel.open, .learning-panel.open {
+        right: 0 !important;
+    }
+}
+
+/* Skeleton pulse animation class for text / stats boxes */
+.skeleton-pulse {
+    position: relative;
+    overflow: hidden;
+    color: transparent !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 4px;
+    display: inline-block;
+    min-width: 80px;
+    height: 1.2em;
+    animation: pulse-shimmer 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse-shimmer {
+    0% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 0.35;
+    }
+    100% {
+        opacity: 0.6;
+    }
 }
 
