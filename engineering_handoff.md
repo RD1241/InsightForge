@@ -802,6 +802,12 @@ Version 3.0 redesigns the complete user experience around the **30-second rule**
 - **Glassmorphic Observations**: Added soft indigo borders and gradients to AI Observation boxes.
 - **Responsive Layout Breakpoints**: Designed the grid layout to wrap seamlessly from 6 columns on desktops to 3 columns on tablets, and 2 columns on mobile.
 
+### 15.5 Cycle 6: Stability & Concurrency Polish
+- **Request Token Guards**: Integrated async query matching token sequences to filter out stale data updates on rapid dropdown switches.
+- **Mutual Drawer Toggles**: Coordinated open/close actions on chat and learning side panels to eliminate layering conflicts.
+- **State Cleanup & Resets**: Added What-If configuration cleanup upon product switches and persisted background model fitting state.
+- **PDF Export safety**: Placed defensive blocks to avoid JavaScript thread errors if statistics are absent.
+
 ---
 
 *This document was generated as the final engineering handoff for InsightForge v3.0.0 following the Version 3.0 development and redesign phases.*
