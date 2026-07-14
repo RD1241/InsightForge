@@ -1452,3 +1452,57 @@ a {
     border-radius: 4px;
 }
 
+/* Version 3.0 Styling Additions */
+
+/* Collapsible technical details disclosure custom summary arrow hide */
+.technical-details-disclosure summary::-webkit-details-marker {
+    display: none;
+}
+.technical-details-disclosure summary {
+    list-style: none;
+    cursor: pointer;
+    outline: none;
+    transition: color var(--transition-speed) ease;
+}
+.technical-details-disclosure summary:hover {
+    color: var(--text-primary);
+}
+
+/* AI Observation Box glassmorphic styles */
+.ai-observation-box {
+    background: rgba(99, 102, 241, 0.02);
+    border: 1px solid rgba(99, 102, 241, 0.08);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+    transition: all var(--transition-speed) ease;
+}
+.ai-observation-box:hover {
+    border-color: rgba(99, 102, 241, 0.2);
+    background: rgba(99, 102, 241, 0.04);
+}
+
+/* Responsive Grid-6 layout for Executive Summary Board */
+.grid-6 {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem;
+}
+@media (max-width: 1024px) {
+    .grid-6 {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+@media (max-width: 640px) {
+    .grid-6 {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+/* Hover transitions for quick action pills */
+.suggestion-tag:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    transform: translateY(-1px);
+}
+

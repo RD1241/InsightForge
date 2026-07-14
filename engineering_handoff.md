@@ -797,6 +797,11 @@ Version 3.0 redesigns the complete user experience around the **30-second rule**
 - **Analyst Renaming**: Repurposed "AI Retail Analyst" references to "Retail AI Assistant" for user friendliness.
 - **Quick Action Prompts**: Added a grid of 7 emoji-prefixed quick action buttons at the bottom of the chat drawer to trigger immediate business checks.
 
+### 15.4 Phase 3.4: Styling, Animations & Micro-interactions
+- **Collapsible Disclosure Styling**: Custom CSS hides summary indicators and underlines gear triggers for cleaner, more premium layouts.
+- **Glassmorphic Observations**: Added soft indigo borders and gradients to AI Observation boxes.
+- **Responsive Layout Breakpoints**: Designed the grid layout to wrap seamlessly from 6 columns on desktops to 3 columns on tablets, and 2 columns on mobile.
+
 ---
 
 *This document was generated as the final engineering handoff for InsightForge v3.0.0 following the Version 3.0 development and redesign phases.*
