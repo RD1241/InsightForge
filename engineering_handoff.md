@@ -793,6 +793,10 @@ Version 3.0 redesigns the complete user experience around the **30-second rule**
 - **Progressive Disclosure Details**: Encapsulated standard validation tables (MAE, MAPE, R²) inside collapsible HTML `<details>` blocks.
 - **Model Engine Branding**: Relabeled models with intuitive descriptive prefixes (e.g. `★ Forecast Engine (Facebook Prophet)`).
 
+### 15.3 Phase 3.3: Retail AI Assistant Upgrade
+- **Analyst Renaming**: Repurposed "AI Retail Analyst" references to "Retail AI Assistant" for user friendliness.
+- **Quick Action Prompts**: Added a grid of 7 emoji-prefixed quick action buttons at the bottom of the chat drawer to trigger immediate business checks.
+
 ---
 
 *This document was generated as the final engineering handoff for InsightForge v3.0.0 following the Version 3.0 development and redesign phases.*
