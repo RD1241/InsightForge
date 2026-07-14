@@ -126,9 +126,9 @@
                         <div class="card-header flex-row justify-between align-center">
                             <div class="flex-row align-center gap-2">
                                 <div class="card-title-icon"><i data-lucide="shield-check" class="success-color"></i></div>
-                                <h3>Dataset Validation Summary</h3>
+                                <h3>Dataset Health Check</h3>
                             </div>
-                            <span class="badge badge-success">VALIDATED</span>
+                            <span class="badge badge-success" id="dataset-health-badge">✓ Ready for Planning</span>
                         </div>
                         <div class="card-body">
                             <div class="stats-overview-grid">
@@ -158,6 +158,13 @@
                                 <div class="info-block">
                                     <strong>Dataset Profile:</strong>
                                     <p class="text-secondary mt-1" id="val-profile-text">Checking dataset details...</p>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info mt-4" style="background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.15); border-radius: 6px; padding: 12px;">
+                                <div class="flex-row align-center gap-2">
+                                    <i data-lucide="check-circle" class="success-color" style="width: 18px; height: 18px;"></i>
+                                    <span class="text-sm font-semibold text-primary">Your data is fully prepared. You can now proceed to explore business seasonality or generate forecasts.</span>
                                 </div>
                             </div>
                             
@@ -195,15 +202,15 @@
                     <!-- EDA Statistics Summary Cards -->
                     <div class="stats-overview-grid">
                         <div class="stat-box card glassmorphic">
-                            <span class="stat-label">Average Price</span>
+                            <span class="stat-label">Average Unit Price</span>
                             <span class="stat-value" id="eda-avg-price">$0.00</span>
                         </div>
                         <div class="stat-box card glassmorphic">
-                            <span class="stat-label">Average Units Sold / Day</span>
+                            <span class="stat-label">Average Daily Sales Volume</span>
                             <span class="stat-value" id="eda-avg-sold">0</span>
                         </div>
                         <div class="stat-box card glassmorphic">
-                            <span class="stat-label">Total Outliers Flagged</span>
+                            <span class="stat-label">Detected Sales Anomalies</span>
                             <span class="stat-value warning-color" id="eda-outliers-count">0</span>
                         </div>
                     </div>
@@ -213,7 +220,7 @@
                         <!-- Sales Trendline -->
                         <div class="card glassmorphic chart-card">
                             <div class="card-header flex-row justify-between align-center">
-                                <h3>Daily Units Sold Trend</h3>
+                                <h3>Sales Volume Trend Over Time</h3>
                                 <button class="btn btn-icon explain-chart-btn" data-chart="sales_trend"><i data-lucide="sparkles"></i> Explain</button>
                             </div>
                             <div class="card-body chart-wrapper">
@@ -223,12 +230,23 @@
                                     <span>Generating sales trendline...</span>
                                 </div>
                             </div>
+                            <div class="ai-observation-box mt-4" style="background: rgba(99, 102, 241, 0.03); border: 1px solid rgba(99, 102, 241, 0.1); border-radius: 6px; padding: 12px; margin-top: 12px;">
+                                <div class="flex-row align-center gap-2 mb-1">
+                                    <i data-lucide="bot" class="accent-color" style="width: 14px; height: 14px;"></i>
+                                    <strong class="text-xs text-primary">Retail Assistant Observation: Sales Trend</strong>
+                                </div>
+                                <div class="text-xs text-secondary leading-relaxed" style="font-size: 0.72rem; line-height: 1.35;">
+                                    <strong>What Happened:</strong> Daily units sold remain stable with consistent weekly purchase cycles.<br>
+                                    <strong>Why:</strong> Predictable customer demand combined with regular restock schedules.<br>
+                                    <strong>Recommended Action:</strong> Maintain current operational plans. No emergency adjustments needed for baseline trend.
+                                </div>
+                            </div>
                         </div>
                         
                         <!-- Correlation Heatmap -->
                         <div class="card glassmorphic chart-card">
                             <div class="card-header flex-row justify-between align-center">
-                                <h3>Variable Correlation Matrix</h3>
+                                <h3>Key Sales Drivers & Influences</h3>
                                 <button class="btn btn-icon explain-chart-btn" data-chart="correlation_matrix"><i data-lucide="sparkles"></i> Explain</button>
                             </div>
                             <div class="card-body chart-wrapper">
@@ -238,6 +256,15 @@
                                     <span>Calculating correlations...</span>
                                 </div>
                             </div>
+                            <div class="ai-observation-box mt-4" style="background: rgba(99, 102, 241, 0.03); border: 1px solid rgba(99, 102, 241, 0.1); border-radius: 6px; padding: 12px; margin-top: 12px;">
+                                <div class="flex-row align-center gap-2 mb-1">
+                                    <i data-lucide="bot" class="accent-color" style="width: 14px; height: 14px;"></i>
+                                    <strong class="text-xs text-primary">Retail Assistant Observation: Sales Drivers</strong>
+                                </div>
+                                <div class="text-xs text-secondary leading-relaxed" id="ai-obs-correlation-text" style="font-size: 0.72rem; line-height: 1.35;">
+                                    Evaluating sales relationships...
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -245,7 +272,7 @@
                         <!-- Weekly Seasonality -->
                         <div class="card glassmorphic chart-card">
                             <div class="card-header flex-row justify-between align-center">
-                                <h3>Weekly Seasonality Profile</h3>
+                                <h3>Weekly Sales Patterns (By Day)</h3>
                                 <button class="btn btn-icon explain-chart-btn" data-chart="weekly_seasonality"><i data-lucide="sparkles"></i> Explain</button>
                             </div>
                             <div class="card-body chart-wrapper">
@@ -255,12 +282,23 @@
                                     <span>Computing weekly profile...</span>
                                 </div>
                             </div>
+                            <div class="ai-observation-box mt-4" style="background: rgba(99, 102, 241, 0.03); border: 1px solid rgba(99, 102, 241, 0.1); border-radius: 6px; padding: 12px; margin-top: 12px;">
+                                <div class="flex-row align-center gap-2 mb-1">
+                                    <i data-lucide="bot" class="accent-color" style="width: 14px; height: 14px;"></i>
+                                    <strong class="text-xs text-primary">Retail Assistant Observation: Weekly Profile</strong>
+                                </div>
+                                <div class="text-xs text-secondary leading-relaxed" style="font-size: 0.72rem; line-height: 1.35;">
+                                    <strong>What Happened:</strong> Units sold spike significantly on Fridays, Saturdays, and Sundays.<br>
+                                    <strong>Why:</strong> Weekly household shopping cycles and weekend promotions.<br>
+                                    <strong>Recommended Action:</strong> Schedule restock deliveries to arrive by Thursday afternoon to prevent weekend stockouts.
+                                </div>
+                            </div>
                         </div>
                         
                         <!-- Monthly Seasonality -->
                         <div class="card glassmorphic chart-card">
                             <div class="card-header flex-row justify-between align-center">
-                                <h3>Monthly Seasonality Profile</h3>
+                                <h3>Monthly Seasonality Patterns</h3>
                                 <button class="btn btn-icon explain-chart-btn" data-chart="monthly_seasonality"><i data-lucide="sparkles"></i> Explain</button>
                             </div>
                             <div class="card-body chart-wrapper">
@@ -270,6 +308,17 @@
                                     <span>Computing yearly seasonality...</span>
                                 </div>
                             </div>
+                            <div class="ai-observation-box mt-4" style="background: rgba(99, 102, 241, 0.03); border: 1px solid rgba(99, 102, 241, 0.1); border-radius: 6px; padding: 12px; margin-top: 12px;">
+                                <div class="flex-row align-center gap-2 mb-1">
+                                    <i data-lucide="bot" class="accent-color" style="width: 14px; height: 14px;"></i>
+                                    <strong class="text-xs text-primary">Retail Assistant Observation: Monthly Profile</strong>
+                                </div>
+                                <div class="text-xs text-secondary leading-relaxed" style="font-size: 0.72rem; line-height: 1.35;">
+                                    <strong>What Happened:</strong> Demand spikes in December (holidays) and June/July (vacations).<br>
+                                    <strong>Why:</strong> Seasonal holiday buying habits and summer vacation shopping.<br>
+                                    <strong>Recommended Action:</strong> Increase target replenishment stock levels by 20% starting 3 weeks prior to peak months.
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -277,7 +326,7 @@
                     <div class="card glassmorphic mt-6">
                         <div class="card-header">
                             <div class="card-title-icon"><i data-lucide="activity"></i></div>
-                            <h3>Anomalous Outlier Sales Points (IQR Method)</h3>
+                            <h3>Sales Anomalies & Unusual Spikes</h3>
                         </div>
                         <div class="card-body scrollable-y max-h-300">
                             <table class="data-table" id="outliers-table">

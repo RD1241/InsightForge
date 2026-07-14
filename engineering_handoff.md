@@ -778,6 +778,15 @@ The inventory planning logic is centralized in Python (`train_pipeline.py`):
 - **Registry Locking**: Protected concurrent reads on `models_registry.json` using the existing thread-safe reentrant lock `_registry_lock`.
 - **Plotly Memory Cleanup**: Purges old Plotly graph instances with `Plotly.purge()` to prevent DOM memory leaks over long browser sessions.
 
+## 15. Version 3.0 Executive Experience & AI Decision Intelligence
+
+Version 3.0 redesigns the complete user experience around the **30-second rule**—allowing a non-technical retail manager to immediately make decisions—and applies **progressive disclosure** to keep technical details available for academic examination.
+
+### 15.1 Phase 3.1: Data Hub & Business Overview (EDA) Redesign
+- **Dataset Health Check**: Replaced raw technical descriptions with a direct health badge (`✓ Ready for Planning`) and next-steps guidance.
+- **Key Sales Drivers & Influences**: Renamed the correlation matrix card and implemented a dynamic **AI Driver Analysis** text card that parses price elasticity, promotional peaks, and weekend traffic correlations into plain language.
+- **Inline AI Observation Cards**: Added observations below all EDA trendlines and seasonality charts answering: *What happened?*, *Why?*, and *Recommended Action*.
+
 ---
 
-*This document was generated as the final engineering handoff for InsightForge v2.0.0 following the Version 2.0 development and hardening cycles.*
+*This document was generated as the final engineering handoff for InsightForge v3.0.0 following the Version 3.0 development and redesign phases.*

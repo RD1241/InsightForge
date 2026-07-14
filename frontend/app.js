@@ -878,9 +878,9 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Update header breadcrumb
         const titleMap = {
-            "data-hub": "Data Hub",
-            "eda": "Exploratory EDA Dashboard",
-            "forecasting": "Demand Forecast Engine"
+            "data-hub": "Is my data ready? — Data Hub",
+            "eda": "What is happening in my business? — Business Overview",
+            "forecasting": "What will happen next? — AI Recommendations"
         };
         el.pageTitle.textContent = titleMap[pageId] || "Dashboard";
 
@@ -1131,6 +1131,49 @@ document.addEventListener("DOMContentLoaded", () => {
             drawCorrelationChart(eda.correlation_matrix);
             drawSeasonalityChart("chart-weekly", eda.weekly_seasonality, "Weekly Seasonality Pattern", "Day of Week");
             drawSeasonalityChart("chart-monthly", eda.monthly_seasonality, "Monthly Seasonality Pattern", "Month");
+
+            // Calculate dynamic drivers from correlation matrix
+            try {
+                const corr = eda.correlation_matrix;
+                const cols = corr.columns || [];
+                const mat = corr.matrix || [];
+                const unitsSoldIdx = cols.indexOf('units_sold');
+                const priceIdx = cols.indexOf('price');
+                const stockIdx = cols.indexOf('stock_on_hand');
+                const promoIdx = cols.indexOf('promotion_flag');
+                const weekendIdx = cols.indexOf('is_weekend');
+                
+                let promoVal = (unitsSoldIdx !== -1 && promoIdx !== -1 && mat[unitsSoldIdx]) ? mat[unitsSoldIdx][promoIdx] : 0;
+                let priceVal = (unitsSoldIdx !== -1 && priceIdx !== -1 && mat[unitsSoldIdx]) ? mat[unitsSoldIdx][priceIdx] : 0;
+                let stockVal = (unitsSoldIdx !== -1 && stockIdx !== -1 && mat[unitsSoldIdx]) ? mat[unitsSoldIdx][stockIdx] : 0;
+                let weekendVal = (unitsSoldIdx !== -1 && weekendIdx !== -1 && mat[unitsSoldIdx]) ? mat[unitsSoldIdx][weekendIdx] : 0;
+                
+                let driverHtml = "<strong>What Happened:</strong> Analyzed historical demand correlations.<br><strong>Why (Calculated Drivers):</strong><br>";
+                let driversList = [];
+                if (Math.abs(promoVal) > 0.05) {
+                    driversList.push(`- 🚀 <strong>Promotions:</strong> Positive impact (+${Math.round(promoVal * 100)}% correlation) - campaigns spike volume.`);
+                }
+                if (Math.abs(weekendVal) > 0.05) {
+                    driversList.push(`- 🗓️ <strong>Weekend shopping:</strong> Positive impact (+${Math.round(weekendVal * 100)}% correlation) - high weekend store footfall.`);
+                }
+                if (Math.abs(priceVal) > 0.05) {
+                    driversList.push(`- 💸 <strong>Price Elasticity:</strong> Negative impact (${Math.round(priceVal * 100)}% correlation) - price hikes lower sales volume.`);
+                }
+                if (Math.abs(stockVal) > 0.05) {
+                    driversList.push(`- 📦 <strong>Stock availability:</strong> Positive correlation (+${Math.round(stockVal * 100)}%) - stockouts immediately cap revenue.`);
+                }
+                
+                if (driversList.length > 0) {
+                    driverHtml += driversList.join("<br>") + "<br>";
+                } else {
+                    driverHtml += "No strong statistical sales drivers detected in this dataset yet.<br>";
+                }
+                driverHtml += "<strong>Recommended Action:</strong> Run targeted campaigns on Wednesdays/Thursdays to align with high-impact weekend shopping patterns.";
+                document.getElementById("ai-obs-correlation-text").innerHTML = driverHtml;
+            } catch (err) {
+                console.error("Failed to parse key drivers from correlation matrix:", err);
+                document.getElementById("ai-obs-correlation-text").innerHTML = "<strong>Observation:</strong> Sales drivers could not be evaluated due to lack of variable history.";
+            }
             
             // Hide chart spinners on success
             el.loaderSalesTrend.classList.add("hidden");
