@@ -808,6 +808,13 @@ Version 3.0 redesigns the complete user experience around the **30-second rule**
 - **State Cleanup & Resets**: Added What-If configuration cleanup upon product switches and persisted background model fitting state.
 - **PDF Export safety**: Placed defensive blocks to avoid JavaScript thread errors if statistics are absent.
 
+### 15.6 Cycle 7: Visual Polish & UX Upgrades
+- **Unified INR Currency**: Converted average price and sales stats from USD (`$`) to Rupee (`₹`).
+- **Sidebar & Breadcrumb Renames**: Refactored Exploratory EDA ➔ *Sales Insights* and Forecast Engine ➔ *AI Recommendation & Forecasts*.
+- **CSV Download Route**: Added the `/api/dataset/template` endpoint on the backend and placed a direct template download button on the Data Hub.
+- **Glassmorphic & Mobile CSS**: Lowered slide-out drawer backgrounds to `0.8` opacity to activate the blur filter, and added media queries to hide the sidebar, collapse padding, and stack stats cards.
+- **Shimmering Loading Skeletons**: Replaced spinners with shimmering card background gradients and clip-path bar-chart placeholders. Pulsing skeleton blocks are applied to KPI values during load periods.
+
 ---
 
 *This document was generated as the final engineering handoff for InsightForge v3.0.0 following the Version 3.0 development and redesign phases.*
