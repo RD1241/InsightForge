@@ -29,7 +29,12 @@ document.addEventListener("DOMContentLoaded", () => {
             priceMultiplier: 1.0,
             promoDays: []
         },
-        scenarios: []
+        scenarios: [],
+        requestTokens: {
+            eda: 0,
+            forecast: 0
+        },
+        isTraining: false
     };
 
     // --- API Service Wrapper ---
@@ -876,6 +881,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
         state.activePage = pageId;
         
+        // Trigger Plotly dimension updates on activation (fixes hidden tab rendering issues)
+        setTimeout(() => {
+            if (pageId === "eda") {
+                ["sales-trend-plot", "correlation-heatmap", "weekly-pattern-plot", "monthly-pattern-plot"].forEach(id => {
+                    const plotEl = document.getElementById(id);
+                    if (plotEl && plotEl.classList.contains("js-plotly-plot")) {
+                        Plotly.Plots.resize(plotEl);
+                    }
+                });
+            } else if (pageId === "forecasting") {
+                const plotEl = document.getElementById("forecast-plot");
+                if (plotEl && plotEl.classList.contains("js-plotly-plot")) {
+                    Plotly.Plots.resize(plotEl);
+                }
+            }
+        }, 100);
+        
         // Update header breadcrumb
         const titleMap = {
             "data-hub": "Is my data ready? — Data Hub",
@@ -1110,6 +1132,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- EDA Page Logic ---
     async function loadEdaPage() {
+        // Increment and capture token for race-condition prevention
+        state.requestTokens.eda += 1;
+        const currentToken = state.requestTokens.eda;
+
         // Show chart spinners
         el.loaderSalesTrend.classList.remove("hidden");
         el.loaderCorrelation.classList.remove("hidden");
@@ -1118,6 +1144,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         try {
             const eda = await api.get("/api/dataset/eda");
+            if (currentToken !== state.requestTokens.eda) return; // Stale request, discard
             state.edaData = eda;
             
             // Stats
@@ -1299,6 +1326,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 el.forecastSummaryContainer.classList.add("hidden");
                 el.forecastWorkspace.classList.add("hidden");
                 el.scenarioHistoryCard.classList.add("hidden");
+                
+                // Keep UI locked if training is active in background
+                if (state.isTraining) {
+                    el.trainingProgressBox.classList.remove("hidden");
+                    el.trainModelsBtn.disabled = true;
+                } else {
+                    el.trainingProgressBox.classList.add("hidden");
+                    el.trainModelsBtn.disabled = false;
+                }
             }
         } catch (error) {
             console.error("Forecasting loading error:", error);
@@ -1307,6 +1343,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Trigger Model Training
     el.trainModelsBtn.addEventListener("click", async () => {
+        state.isTraining = true;
         el.trainingProgressBox.classList.remove("hidden");
         el.trainModelsBtn.disabled = true;
         
@@ -1335,6 +1372,7 @@ document.addEventListener("DOMContentLoaded", () => {
             el.trainingProgressText.textContent = "Training optimization complete!";
             showToast("Forecasting models trained successfully!", "success");
             
+            state.isTraining = false;
             setTimeout(() => {
                 el.trainingProgressBox.classList.add("hidden");
                 el.trainModelsBtn.disabled = false;
@@ -1344,6 +1382,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
         } catch (error) {
             clearInterval(progressInterval);
+            state.isTraining = false;
             el.trainingProgressText.textContent = `Training failed: ${error.message}`;
             el.trainingProgressFill.style.backgroundColor = "var(--error)";
             el.trainModelsBtn.disabled = false;
@@ -1395,6 +1434,19 @@ document.addEventListener("DOMContentLoaded", () => {
         state.scenarios = [];
         updateScenarioHistoryTable();
         
+        // Reset What-If simulator state and UI controls
+        state.simulator.priceMultiplier = 1.0;
+        state.simulator.promoDays = [];
+        state.simulator.activePresetName = null;
+        if (el.simPriceSlider) {
+            el.simPriceSlider.value = 100;
+        }
+        if (el.simPriceVal) {
+            el.simPriceVal.textContent = "100%";
+        }
+        document.querySelectorAll(".sim-day-checkbox").forEach(cb => cb.checked = false);
+        document.querySelectorAll(".preset-btn").forEach(btn => btn.classList.remove("active"));
+        
         const models = Object.keys(prodData.all_models);
         let modelOptions = `<option value="best_recommender">★ Best recommended: ${escapeHtml(getModelFriendlyLabel(prodData.best_model))}</option>`;
         models.forEach(m => {
@@ -1439,6 +1491,10 @@ document.addEventListener("DOMContentLoaded", () => {
     async function generateForecast() {
         if (!state.activeProduct) return;
         
+        // Increment and capture token for race-condition prevention
+        state.requestTokens.forecast += 1;
+        const currentToken = state.requestTokens.forecast;
+        
         // Show forecast overlay spinner
         el.loaderForecast.classList.remove("hidden");
         
@@ -1463,6 +1519,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     baseUrl += `&model_name=${encodeURIComponent(selectedModelVal)}`;
                 }
                 const baselineResponse = await api.get(baseUrl);
+                if (currentToken !== state.requestTokens.forecast) return; // Stale request, discard
                 state.baselineForecastData = baselineResponse;
             }
             
@@ -1474,6 +1531,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     url += `&model_name=${encodeURIComponent(selectedModelVal)}`;
                 }
                 data = await api.get(url);
+                if (currentToken !== state.requestTokens.forecast) return; // Stale request, discard
             } else {
                 data = state.baselineForecastData;
             }
@@ -1743,6 +1801,9 @@ document.addEventListener("DOMContentLoaded", () => {
         state.chatOpen = isOpen;
         if (isOpen) {
             el.chatPanel.classList.add("open");
+            if (state.learning.isOpen) {
+                toggleLearningCenter(false);
+            }
         } else {
             el.chatPanel.classList.remove("open");
         }
@@ -2178,7 +2239,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // Export PDF Report print triggers
     if (el.exportReportBtn) {
         el.exportReportBtn.addEventListener("click", async () => {
-            if (!state.activeProduct || !state.trainedReport) return;
+            if (!state.activeProduct || !state.trainedReport || !state.datasetStats) {
+                showToast("Please ensure dataset and forecasts are loaded before exporting.", "warning");
+                return;
+            }
             
             const productId = state.activeProduct;
             const prodData = state.trainedReport.products[productId];
