@@ -901,8 +901,8 @@ document.addEventListener("DOMContentLoaded", () => {
         // Update header breadcrumb
         const titleMap = {
             "data-hub": "Is my data ready? — Data Hub",
-            "eda": "What is happening in my business? — Business Overview",
-            "forecasting": "What will happen next? — AI Recommendations"
+            "eda": "What is happening in my business? — Sales Insights",
+            "forecasting": "What will happen next? — AI Recommendation & Forecasts"
         };
         el.pageTitle.textContent = titleMap[pageId] || "Dashboard";
 
@@ -1136,11 +1136,15 @@ document.addEventListener("DOMContentLoaded", () => {
         state.requestTokens.eda += 1;
         const currentToken = state.requestTokens.eda;
 
-        // Show chart spinners
+        // Show chart spinners & skeleton loading for stats box values
         el.loaderSalesTrend.classList.remove("hidden");
         el.loaderCorrelation.classList.remove("hidden");
         el.loaderWeekly.classList.remove("hidden");
         el.loaderMonthly.classList.remove("hidden");
+        
+        el.edaAvgPrice.classList.add("skeleton-pulse");
+        el.edaAvgSold.classList.add("skeleton-pulse");
+        el.edaOutliersCount.classList.add("skeleton-pulse");
         
         try {
             const eda = await api.get("/api/dataset/eda");
@@ -1149,7 +1153,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // Stats
             const stats = eda.descriptive_statistics.units_sold || {};
-            el.edaAvgPrice.textContent = `$${eda.descriptive_statistics.price?.mean?.toFixed(2) || "0.00"}`;
+            el.edaAvgPrice.textContent = `₹${eda.descriptive_statistics.price?.mean?.toFixed(2) || "0.00"}`;
             el.edaAvgSold.textContent = Math.round(stats.mean || 0).toLocaleString();
             el.edaOutliersCount.textContent = eda.outliers_count;
             
@@ -1202,11 +1206,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 document.getElementById("ai-obs-correlation-text").innerHTML = "<strong>Observation:</strong> Sales drivers could not be evaluated due to lack of variable history.";
             }
             
-            // Hide chart spinners on success
+            // Hide chart spinners and remove skeleton load states on success
             el.loaderSalesTrend.classList.add("hidden");
             el.loaderCorrelation.classList.add("hidden");
             el.loaderWeekly.classList.add("hidden");
             el.loaderMonthly.classList.add("hidden");
+            
+            el.edaAvgPrice.classList.remove("skeleton-pulse");
+            el.edaAvgSold.classList.remove("skeleton-pulse");
+            el.edaOutliersCount.classList.remove("skeleton-pulse");
             
             // Populate Outliers Table
             let outliersHtml = "";
@@ -1229,11 +1237,15 @@ document.addEventListener("DOMContentLoaded", () => {
             
         } catch (error) {
             console.error("EDA Loading failed:", error);
-            // Hide spinners even on failure
+            // Hide spinners and remove skeleton load states even on failure
             el.loaderSalesTrend.classList.add("hidden");
             el.loaderCorrelation.classList.add("hidden");
             el.loaderWeekly.classList.add("hidden");
             el.loaderMonthly.classList.add("hidden");
+            
+            el.edaAvgPrice.classList.remove("skeleton-pulse");
+            el.edaAvgSold.classList.remove("skeleton-pulse");
+            el.edaOutliersCount.classList.remove("skeleton-pulse");
             showToast("Failed to load descriptive EDA dashboard.", "error");
         }
     }
@@ -1495,8 +1507,14 @@ document.addEventListener("DOMContentLoaded", () => {
         state.requestTokens.forecast += 1;
         const currentToken = state.requestTokens.forecast;
         
-        // Show forecast overlay spinner
+        // Show forecast overlay spinner & skeleton loading for executive metrics
         el.loaderForecast.classList.remove("hidden");
+        el.forecastSummaryContainer.classList.remove("hidden");
+        
+        ["exec-demand-outlook", "exec-projected-revenue", "exec-inventory-status", "exec-revenue-loss", "exec-prediction-accuracy", "exec-forecast-reliability"].forEach(id => {
+            const dom = document.getElementById(id);
+            if (dom) dom.classList.add("skeleton-pulse");
+        });
         
         const productId = state.activeProduct;
         const horizon = el.forecastHorizonSelect.value;
@@ -1675,6 +1693,11 @@ document.addEventListener("DOMContentLoaded", () => {
                         showToast("AI Action Plan acknowledged. Replenishment tasks logged.", "success");
                     };
                 }
+                // Remove skeleton loader states
+                ["exec-demand-outlook", "exec-projected-revenue", "exec-inventory-status", "exec-revenue-loss", "exec-prediction-accuracy", "exec-forecast-reliability"].forEach(id => {
+                    const dom = document.getElementById(id);
+                    if (dom) dom.classList.remove("skeleton-pulse");
+                });
             }
             
             // 5. Store current scenario metrics temporarily
@@ -1699,6 +1722,10 @@ document.addEventListener("DOMContentLoaded", () => {
             console.error("Forecast failed:", error);
             el.loaderForecast.classList.add("hidden");
             showToast(`Forecast failed: ${error.message}`, "error");
+            ["exec-demand-outlook", "exec-projected-revenue", "exec-inventory-status", "exec-revenue-loss", "exec-prediction-accuracy", "exec-forecast-reliability"].forEach(id => {
+                const dom = document.getElementById(id);
+                if (dom) dom.classList.remove("skeleton-pulse");
+            });
         } finally {
             el.runForecastBtn.disabled = false;
         }
@@ -2127,10 +2154,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
         
+        const debouncedGenerateForecast = debounce(generateForecast, 300);
         el.simPriceSlider.addEventListener("change", (e) => {
             state.simulator.priceMultiplier = parseFloat(e.target.value) / 100.0;
             state.simulator.activePresetName = "Custom Overrides";
-            generateForecast();
+            debouncedGenerateForecast();
         });
     }
 
@@ -2354,6 +2382,15 @@ document.addEventListener("DOMContentLoaded", () => {
             return recommendedPrefix + "Simple Baseline Engine (Linear Regression)";
         }
         return recommendedPrefix + modelName;
+    }
+
+    // Debounce function to limit request frequencies
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
     }
 
     // Run startup status check
