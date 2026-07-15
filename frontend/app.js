@@ -35,7 +35,18 @@ document.addEventListener("DOMContentLoaded", () => {
             forecast: 0
         },
         isTraining: false,
-        chatSessionId: null
+        chatSessionId: null,
+        filters: {
+            productIds: [],
+            categories: [],
+            startDate: null,
+            endDate: null
+        },
+        filterOptions: {
+            products: [],   // [{product_id, product_name, category}], loaded once per dataset
+            categories: [], // unique category names, derived from products
+            loaded: false
+        }
     };
 
     // --- API Service Wrapper ---
@@ -201,7 +212,27 @@ document.addEventListener("DOMContentLoaded", () => {
         edaAvgSold: document.getElementById("eda-avg-sold"),
         edaOutliersCount: document.getElementById("eda-outliers-count"),
         outliersTable: document.getElementById("outliers-table").querySelector("tbody"),
-        
+
+        // EDA Filter Bar
+        productFilterToggle: document.getElementById("product-filter-toggle"),
+        productFilterLabel: document.getElementById("product-filter-label"),
+        productFilterPanel: document.getElementById("product-filter-panel"),
+        productFilterSearch: document.getElementById("product-filter-search"),
+        productFilterList: document.getElementById("product-filter-list"),
+        productFilterClear: document.getElementById("product-filter-clear"),
+        productFilterApply: document.getElementById("product-filter-apply"),
+        categoryFilterChips: document.getElementById("category-filter-chips"),
+        filterStartDate: document.getElementById("filter-start-date"),
+        filterEndDate: document.getElementById("filter-end-date"),
+        dateQuickChips: document.getElementById("date-quick-chips"),
+        filterResetBtn: document.getElementById("filter-reset-btn"),
+        loaderRevenueCategory: document.getElementById("loader-revenue-category"),
+        loaderMonthlyRevenue: document.getElementById("loader-monthly-revenue"),
+        loaderStockStatus: document.getElementById("loader-stock-status"),
+        loaderPromotionImpact: document.getElementById("loader-promotion-impact"),
+        moversFastestList: document.getElementById("movers-fastest-list"),
+        moversSlowestList: document.getElementById("movers-slowest-list"),
+
         // Forecasting Page
         trainModelsBtn: document.getElementById("train-models-btn"),
         smoothOutliersCheck: document.getElementById("smooth-outliers-check"),
@@ -1046,6 +1077,8 @@ document.addEventListener("DOMContentLoaded", () => {
         state.scenarios = [];
         state.simulator.priceMultiplier = 1.0;
         state.simulator.promoDays = [];
+        state.filters = { productIds: [], categories: [], startDate: null, endDate: null };
+        state.filterOptions = { products: [], categories: [], loaded: false };
         state.requestTokens.eda += 1;
         state.requestTokens.forecast += 1;
         rotateChatSession();
@@ -1060,6 +1093,16 @@ document.addEventListener("DOMContentLoaded", () => {
             el.chatMessages.innerHTML = "";
             appendMessage("Hello! I'm your Retail Business Advisor. Ask me about stock levels, sales performance, or what to do next.", "bot");
         }
+
+        // Reset the filter bar's visible controls immediately rather than waiting for the
+        // next EDA page visit to catch up with the cleared state above.
+        if (el.productFilterLabel) el.productFilterLabel.textContent = "All Products";
+        if (el.productFilterList) el.productFilterList.innerHTML = "";
+        if (el.categoryFilterChips) el.categoryFilterChips.innerHTML = "";
+        if (el.filterStartDate) el.filterStartDate.value = "";
+        if (el.filterEndDate) el.filterEndDate.value = "";
+        if (el.dateQuickChips) el.dateQuickChips.querySelectorAll(".btn-chip").forEach(c => c.classList.remove("active"));
+        if (el.filterResetBtn) el.filterResetBtn.classList.add("hidden");
     }
 
     // Check backend status on page load
@@ -1246,7 +1289,22 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // --- EDA Page Logic ---
+    function buildEdaQueryString() {
+        const f = state.filters;
+        const params = new URLSearchParams();
+        if (f.productIds.length > 0) params.set("product_ids", f.productIds.join(","));
+        if (f.categories.length > 0) params.set("categories", f.categories.join(","));
+        if (f.startDate) params.set("start_date", f.startDate);
+        if (f.endDate) params.set("end_date", f.endDate);
+        const qs = params.toString();
+        return qs ? `?${qs}` : "";
+    }
+
     async function loadEdaPage() {
+        if (!state.filterOptions.loaded) {
+            await loadFilterOptions();
+        }
+
         // Increment and capture token for race-condition prevention
         state.requestTokens.eda += 1;
         const currentToken = state.requestTokens.eda;
@@ -1258,22 +1316,26 @@ document.addEventListener("DOMContentLoaded", () => {
         el.loaderMonthly.classList.remove("hidden");
         el.loaderTopProducts.classList.remove("hidden");
         el.loaderCategory.classList.remove("hidden");
+        el.loaderRevenueCategory.classList.remove("hidden");
+        el.loaderMonthlyRevenue.classList.remove("hidden");
+        el.loaderStockStatus.classList.remove("hidden");
+        el.loaderPromotionImpact.classList.remove("hidden");
 
         el.edaAvgPrice.classList.add("skeleton-pulse");
         el.edaAvgSold.classList.add("skeleton-pulse");
         el.edaOutliersCount.classList.add("skeleton-pulse");
-        
+
         try {
-            const eda = await api.get("/api/dataset/eda");
+            const eda = await api.get(`/api/dataset/eda${buildEdaQueryString()}`);
             if (currentToken !== state.requestTokens.eda) return; // Stale request, discard
             state.edaData = eda;
-            
+
             // Stats
             const stats = eda.descriptive_statistics.units_sold || {};
             el.edaAvgPrice.textContent = `₹${eda.descriptive_statistics.price?.mean?.toFixed(2) || "0.00"}`;
             el.edaAvgSold.textContent = Math.round(stats.mean || 0).toLocaleString();
             el.edaOutliersCount.textContent = eda.outliers_count;
-            
+
             // Draw Charts
             drawSalesTrendChart(eda.sales_trend);
             // Correlation heatmap is drawn lazily the first time "View Detailed Analysis" is opened (see listener below) —
@@ -1282,6 +1344,11 @@ document.addEventListener("DOMContentLoaded", () => {
             drawSeasonalityChart("chart-monthly", eda.monthly_seasonality, "Monthly Seasonality Pattern", "Month");
             drawTopProductsChart(eda.top_products);
             drawCategoryPerformanceChart(eda.category_performance);
+            drawRevenueByCategoryChart(eda.revenue_by_category);
+            drawMonthlyRevenueTrendChart(eda.monthly_revenue_trend);
+            drawStockStatusChart(eda.stock_status_distribution);
+            drawPromotionImpactChart(eda.promotion_impact);
+            renderMoversLists(eda.fast_slow_movers);
 
             // Calculate dynamic drivers from correlation matrix
             try {
@@ -1329,6 +1396,10 @@ document.addEventListener("DOMContentLoaded", () => {
             el.loaderMonthly.classList.add("hidden");
             el.loaderTopProducts.classList.add("hidden");
             el.loaderCategory.classList.add("hidden");
+            el.loaderRevenueCategory.classList.add("hidden");
+            el.loaderMonthlyRevenue.classList.add("hidden");
+            el.loaderStockStatus.classList.add("hidden");
+            el.loaderPromotionImpact.classList.add("hidden");
 
             el.edaAvgPrice.classList.remove("skeleton-pulse");
             el.edaAvgSold.classList.remove("skeleton-pulse");
@@ -1362,6 +1433,10 @@ document.addEventListener("DOMContentLoaded", () => {
             el.loaderMonthly.classList.add("hidden");
             el.loaderTopProducts.classList.add("hidden");
             el.loaderCategory.classList.add("hidden");
+            el.loaderRevenueCategory.classList.add("hidden");
+            el.loaderMonthlyRevenue.classList.add("hidden");
+            el.loaderStockStatus.classList.add("hidden");
+            el.loaderPromotionImpact.classList.add("hidden");
 
             el.edaAvgPrice.classList.remove("skeleton-pulse");
             el.edaAvgSold.classList.remove("skeleton-pulse");
@@ -1511,6 +1586,303 @@ document.addEventListener("DOMContentLoaded", () => {
         Plotly.purge('chart-category');
         Plotly.newPlot('chart-category', [trace], layout, { responsive: true, displayModeBar: false });
     }
+
+    // Draw Revenue by Category as a horizontal ranking bar (same convention as Top
+    // Products / Sales by Category — single hue, since this ranks one metric, not a
+    // multi-series comparison).
+    function drawRevenueByCategoryChart(revenueByCategory) {
+        const categories = (revenueByCategory || []).slice().sort((a, b) => b.total_revenue - a.total_revenue);
+        const trace = {
+            x: categories.map(c => c.total_revenue),
+            y: categories.map(c => c.category),
+            type: 'bar',
+            orientation: 'h',
+            marker: { color: '#34d399', opacity: 0.85 },
+            text: categories.map(c => `₹${c.total_revenue.toLocaleString()}`),
+            textposition: 'outside',
+            textfont: { color: '#e2e8f0' },
+            hovertemplate: '%{y}<br>₹%{x:,.2f} revenue<extra></extra>'
+        };
+        const layout = horizontalRankingLayout();
+        Plotly.purge('chart-revenue-category');
+        Plotly.newPlot('chart-revenue-category', [trace], layout, { responsive: true, displayModeBar: false });
+    }
+
+    // Draw Monthly Revenue Trend — revenue over calendar time (distinct from the
+    // month-of-year seasonality chart, which averages every January together etc.).
+    function drawMonthlyRevenueTrendChart(monthlyRevenueTrend) {
+        const trend = monthlyRevenueTrend || { labels: [], values: [] };
+        const trace = {
+            x: trend.labels,
+            y: trend.values,
+            type: 'scatter',
+            mode: 'lines+markers',
+            line: { color: '#34d399', width: 3.0, shape: 'spline' },
+            marker: { color: '#34d399', size: 5 },
+            fill: 'tozeroy',
+            fillcolor: 'rgba(52, 211, 153, 0.05)',
+            hovertemplate: '%{x}<br>₹%{y:,.2f} revenue<extra></extra>',
+            name: 'Revenue'
+        };
+        const layout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            margin: { t: 15, r: 15, b: 45, l: 60 },
+            font: { color: '#94a3b8', family: 'Outfit, Inter, sans-serif' },
+            hovermode: 'x',
+            xaxis: { gridcolor: 'rgba(255,255,255,0.02)', linecolor: 'rgba(255,255,255,0.06)' },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.04)', linecolor: 'rgba(255,255,255,0.06)', tickprefix: '₹' }
+        };
+        Plotly.purge('chart-monthly-revenue');
+        Plotly.newPlot('chart-monthly-revenue', [trace], layout, { responsive: true, displayModeBar: false });
+    }
+
+    // Draw Inventory Health Distribution as a donut — a true part-of-whole composition
+    // over a small, fixed set of categories, unlike the ranking bars above.
+    const STOCK_STATUS_STYLE = {
+        OUT_OF_STOCK: { label: "Out of Stock", color: "#f43f5e" },
+        CRITICAL_LOW: { label: "Critical Low", color: "#f59e0b" },
+        LOW_STOCK: { label: "Low Stock", color: "#fbbf24" },
+        HEALTHY: { label: "Healthy", color: "#10b981" }
+    };
+    function drawStockStatusChart(stockStatusDistribution) {
+        const dist = (stockStatusDistribution || []).filter(d => d.count > 0);
+        const trace = {
+            labels: dist.map(d => STOCK_STATUS_STYLE[d.status]?.label || d.status),
+            values: dist.map(d => d.count),
+            type: 'pie',
+            hole: 0.55,
+            marker: { colors: dist.map(d => STOCK_STATUS_STYLE[d.status]?.color || '#6366f1') },
+            textinfo: 'label+percent',
+            textfont: { color: '#e2e8f0', size: 11 },
+            hovertemplate: '%{label}: %{value} products<extra></extra>'
+        };
+        const layout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            margin: { t: 10, r: 10, b: 10, l: 10 },
+            font: { color: '#94a3b8', family: 'Outfit, Inter, sans-serif' },
+            showlegend: true,
+            legend: { orientation: 'h', y: -0.1 }
+        };
+        Plotly.purge('chart-stock-status');
+        Plotly.newPlot('chart-stock-status', [trace], layout, { responsive: true, displayModeBar: false });
+    }
+
+    // Draw Promotion Impact as paired bars (on-promo vs. off-promo average units), one
+    // pair per category plus an "All Categories" summary — a true two-series comparison,
+    // so (unlike the ranking bars) a categorical hue for each series is appropriate here.
+    function drawPromotionImpactChart(promotionImpact) {
+        const rows = promotionImpact || [];
+        const traceOff = {
+            x: rows.map(r => r.category),
+            y: rows.map(r => r.avg_units_off_promo),
+            type: 'bar',
+            name: 'No Promotion',
+            marker: { color: '#475569' },
+            hovertemplate: '%{x}<br>No promo: %{y:.1f} units/day<extra></extra>'
+        };
+        const traceOn = {
+            x: rows.map(r => r.category),
+            y: rows.map(r => r.avg_units_on_promo),
+            type: 'bar',
+            name: 'On Promotion',
+            marker: { color: '#6366f1' },
+            hovertemplate: '%{x}<br>On promo: %{y:.1f} units/day<extra></extra>'
+        };
+        const layout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            margin: { t: 10, r: 15, b: 60, l: 45 },
+            font: { color: '#94a3b8', family: 'Outfit, Inter, sans-serif', size: 11 },
+            barmode: 'group',
+            bargap: 0.3,
+            xaxis: { gridcolor: 'rgba(255,255,255,0.02)', linecolor: 'rgba(255,255,255,0.06)', tickangle: -20 },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.04)', linecolor: 'rgba(255,255,255,0.06)' },
+            legend: { orientation: 'h', y: -0.25 }
+        };
+        Plotly.purge('chart-promotion-impact');
+        Plotly.newPlot('chart-promotion-impact', [traceOff, traceOn], layout, { responsive: true, displayModeBar: false });
+    }
+
+    // Fast / Slow Movers — plain ranked lists rather than another chart; five items with a
+    // name and a % badge read faster as text than as a sixth bar chart on the page.
+    function renderMoversList(container, movers) {
+        if (!movers || movers.length === 0) {
+            container.innerHTML = `<li class="text-secondary text-xs">Not enough history yet to compare periods.</li>`;
+            return;
+        }
+        container.innerHTML = movers.map(m => {
+            const isPositive = m.pct_change >= 0;
+            const sign = isPositive ? "+" : "";
+            return `
+                <li>
+                    <span class="mover-name">${escapeHtml(m.product_name)}</span>
+                    <span class="mover-pct ${isPositive ? 'positive' : 'negative'}">${sign}${m.pct_change}%</span>
+                </li>
+            `;
+        }).join("");
+    }
+    function renderMoversLists(fastSlowMovers) {
+        const data = fastSlowMovers || { fastest_growing: [], slowest_moving: [] };
+        renderMoversList(el.moversFastestList, data.fastest_growing);
+        renderMoversList(el.moversSlowestList, data.slowest_moving);
+    }
+
+    // --- Sales Insights Filter Bar ---
+    async function loadFilterOptions() {
+        try {
+            const data = await api.get("/api/dataset/products");
+            const products = data.products || [];
+            state.filterOptions.products = products;
+            state.filterOptions.categories = [...new Set(products.map(p => p.category))].sort();
+            state.filterOptions.loaded = true;
+            renderProductFilterList(products);
+            renderCategoryFilterChips(state.filterOptions.categories);
+        } catch (error) {
+            console.error("Failed to load filter options:", error);
+        }
+    }
+
+    function renderProductFilterList(products) {
+        el.productFilterList.innerHTML = products.map(p => `
+            <label class="filter-checkbox-item">
+                <input type="checkbox" value="${escapeHtml(p.product_id)}" ${state.filters.productIds.includes(p.product_id) ? "checked" : ""}>
+                <span>${escapeHtml(p.product_name)}</span>
+            </label>
+        `).join("");
+    }
+
+    function renderCategoryFilterChips(categories) {
+        el.categoryFilterChips.innerHTML = categories.map(cat => `
+            <button type="button" class="btn-chip ${state.filters.categories.includes(cat) ? "active" : ""}" data-category="${escapeHtml(cat)}">
+                ${escapeHtml(cat)}
+            </button>
+        `).join("");
+        el.categoryFilterChips.querySelectorAll(".btn-chip").forEach(chip => {
+            chip.addEventListener("click", () => {
+                const cat = chip.getAttribute("data-category");
+                const idx = state.filters.categories.indexOf(cat);
+                if (idx === -1) {
+                    state.filters.categories.push(cat);
+                    chip.classList.add("active");
+                } else {
+                    state.filters.categories.splice(idx, 1);
+                    chip.classList.remove("active");
+                }
+                onFiltersChanged();
+            });
+        });
+    }
+
+    function updateProductFilterLabel() {
+        const n = state.filters.productIds.length;
+        el.productFilterLabel.textContent = n === 0 ? "All Products" : `${n} Product${n > 1 ? "s" : ""}`;
+    }
+
+    function updateFilterResetVisibility() {
+        const f = state.filters;
+        const hasActiveFilters = f.productIds.length > 0 || f.categories.length > 0 || f.startDate || f.endDate;
+        el.filterResetBtn.classList.toggle("hidden", !hasActiveFilters);
+    }
+
+    const debouncedFilterReload = debounce(() => loadEdaPage(), 300);
+    function onFiltersChanged() {
+        updateFilterResetVisibility();
+        debouncedFilterReload();
+    }
+
+    // Product dropdown toggle
+    el.productFilterToggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        el.productFilterPanel.classList.toggle("hidden");
+    });
+    document.addEventListener("click", (e) => {
+        if (!el.productFilterPanel.classList.contains("hidden") && !el.productFilterPanel.contains(e.target) && e.target !== el.productFilterToggle) {
+            el.productFilterPanel.classList.add("hidden");
+        }
+    });
+
+    // Product search filters the visible checkbox rows client-side (option list is
+    // already fully loaded — no need to re-fetch per keystroke)
+    el.productFilterSearch.addEventListener("input", () => {
+        const q = el.productFilterSearch.value.trim().toLowerCase();
+        el.productFilterList.querySelectorAll(".filter-checkbox-item").forEach(item => {
+            const label = item.textContent.trim().toLowerCase();
+            item.style.display = label.includes(q) ? "flex" : "none";
+        });
+    });
+
+    el.productFilterApply.addEventListener("click", () => {
+        const checked = Array.from(el.productFilterList.querySelectorAll("input[type=checkbox]:checked")).map(cb => cb.value);
+        state.filters.productIds = checked;
+        updateProductFilterLabel();
+        el.productFilterPanel.classList.add("hidden");
+        onFiltersChanged();
+    });
+
+    el.productFilterClear.addEventListener("click", () => {
+        state.filters.productIds = [];
+        el.productFilterList.querySelectorAll("input[type=checkbox]").forEach(cb => cb.checked = false);
+        updateProductFilterLabel();
+        onFiltersChanged();
+    });
+
+    // Date range inputs (direct edits) — clears any active quick-chip highlight since a
+    // manually-typed range no longer necessarily matches one of the presets.
+    el.filterStartDate.addEventListener("change", () => {
+        state.filters.startDate = el.filterStartDate.value || null;
+        el.dateQuickChips.querySelectorAll(".btn-chip").forEach(c => c.classList.remove("active"));
+        onFiltersChanged();
+    });
+    el.filterEndDate.addEventListener("change", () => {
+        state.filters.endDate = el.filterEndDate.value || null;
+        el.dateQuickChips.querySelectorAll(".btn-chip").forEach(c => c.classList.remove("active"));
+        onFiltersChanged();
+    });
+
+    // Quick date-range chips
+    el.dateQuickChips.querySelectorAll(".btn-chip").forEach(chip => {
+        chip.addEventListener("click", () => {
+            el.dateQuickChips.querySelectorAll(".btn-chip").forEach(c => c.classList.remove("active"));
+            chip.classList.add("active");
+
+            const range = chip.getAttribute("data-range");
+            const overallStats = state.edaData?.dataset_overview;
+            const datasetEnd = overallStats?.end_date ? new Date(overallStats.end_date) : new Date();
+            let start = null, end = null;
+
+            if (range === "30") {
+                end = datasetEnd;
+                start = new Date(end); start.setDate(start.getDate() - 29);
+            } else if (range === "quarter") {
+                end = datasetEnd;
+                start = new Date(end); start.setMonth(start.getMonth() - 3);
+            } else if (range === "year") {
+                end = datasetEnd;
+                start = new Date(end); start.setFullYear(start.getFullYear() - 1);
+            } else if (range === "all") {
+                start = null; end = null;
+            }
+
+            const toIso = (d) => d.toISOString().slice(0, 10);
+            state.filters.startDate = start ? toIso(start) : null;
+            state.filters.endDate = end ? toIso(end) : null;
+            el.filterStartDate.value = state.filters.startDate || "";
+            el.filterEndDate.value = state.filters.endDate || "";
+            onFiltersChanged();
+        });
+    });
+
+    el.filterResetBtn.addEventListener("click", () => {
+        state.filters = { productIds: [], categories: [], startDate: null, endDate: null };
+        el.filterStartDate.value = "";
+        el.filterEndDate.value = "";
+        updateProductFilterLabel();
+        el.productFilterList.querySelectorAll("input[type=checkbox]").forEach(cb => cb.checked = false);
+        el.categoryFilterChips.querySelectorAll(".btn-chip").forEach(c => c.classList.remove("active"));
+        onFiltersChanged();
+    });
 
     // --- Forecasting Page Logic ---
     async function loadForecastingPage() {

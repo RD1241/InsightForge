@@ -114,6 +114,21 @@ def bench_pipeline_stages(label, df_raw, tmpdir):
     eda, t_eda = timed(generate_eda_report, df_clean)
     print(f"  generate_eda_report:  {t_eda:6.3f}s")
 
+    # Filtered EDA path (Phase 1) is never served from _cached_eda, so every filtered
+    # request pays this cost fresh — worth confirming it doesn't blow up at scale. Picks
+    # a single category + a ~3-month date window, a realistic "narrow it down" filter.
+    sample_category = df_clean['category'].iloc[0]
+    min_date, max_date = df_clean['date'].min(), df_clean['date'].max()
+    window_start = min_date + (max_date - min_date) * 0.4
+    window_end = window_start + pd.Timedelta(days=90)
+    _, t_eda_filtered = timed(
+        generate_eda_report, df_clean,
+        categories=[sample_category],
+        start_date=window_start.strftime("%Y-%m-%d"),
+        end_date=window_end.strftime("%Y-%m-%d"),
+    )
+    print(f"  generate_eda_report (filtered, 1 category + 90-day window): {t_eda_filtered:6.3f}s")
+
     mem1 = rss_mb()
     if HAS_PSUTIL:
         print(f"  process RSS memory:   {mem0:7.1f} MB -> {mem1:7.1f} MB  (+{mem1 - mem0:.1f} MB)")

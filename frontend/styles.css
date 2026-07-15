@@ -1589,3 +1589,214 @@ a {
     }
 }
 
+/* Sales Insights Filter Bar (Phase 1) */
+.filter-bar {
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.filter-bar-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+}
+
+.filter-control {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-label {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.filter-dropdown-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+}
+.filter-dropdown-toggle i {
+    width: 14px;
+    height: 14px;
+}
+
+.filter-dropdown-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 30;
+    width: 260px;
+    background: var(--bg-card);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    padding: 10px;
+}
+
+.filter-search-input {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+.filter-search-input:focus {
+    outline: none;
+    border-color: var(--border-hover);
+}
+
+.filter-checkbox-list {
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.filter-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 6px;
+    border-radius: 4px;
+    font-size: 0.76rem;
+    cursor: pointer;
+}
+.filter-checkbox-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+.filter-checkbox-item input {
+    accent-color: var(--accent);
+}
+
+.filter-dropdown-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+}
+.btn-link:hover {
+    color: var(--accent-light);
+}
+
+.filter-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.btn-chip {
+    padding: 4px 12px;
+    font-size: 0.72rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+}
+.btn-chip:hover {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+}
+.btn-chip.active {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+    color: var(--accent-light);
+}
+
+.filter-date-input {
+    padding: 5px 10px;
+    font-size: 0.76rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-primary);
+}
+.filter-date-input:focus {
+    outline: none;
+    border-color: var(--border-hover);
+}
+
+.filter-quick-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* Fast / Slow Movers lists */
+.movers-list-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+.movers-list-title i {
+    width: 15px;
+    height: 15px;
+}
+.movers-list-title.fastest { color: var(--success); }
+.movers-list-title.slowest { color: var(--error); }
+
+.movers-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.movers-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    font-size: 0.8rem;
+}
+.movers-list .mover-name {
+    color: var(--text-primary);
+}
+.movers-list .mover-pct {
+    font-weight: 600;
+    font-size: 0.76rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+.movers-list .mover-pct.positive {
+    color: var(--success);
+    background: var(--success-glow);
+}
+.movers-list .mover-pct.negative {
+    color: var(--error);
+    background: rgba(244, 63, 94, 0.1);
+}
+

@@ -1,7 +1,7 @@
 import os
 import shutil
 import pandas as pd
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 # Standardize path imports
@@ -292,26 +292,70 @@ async def get_dataset_preview(rows: int = 50):
         logger.error(f"Failed to generate preview: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate preview. Please try again.")
 
-@router.get("/eda")
-async def get_eda_report():
+@router.get("/products")
+async def get_product_catalog():
     """
-    Performs EDA on the active dataset and returns statistics,
-    seasonality data, correlation values, and outlier lists.
-    Cached in-memory (like /status) since EDA generation is the most expensive
-    read-only computation in the app and the underlying data only changes on
-    upload/demo-load/retrain, both of which clear this cache.
+    Returns the full deduplicated product catalog (id, name, category) for the active
+    dataset — used to populate filter pickers (Sales Insights) without shipping the
+    full row-level preview or bloating the EDA payload. Dedupes on product_id alone,
+    keeping the first name/category seen for that id, matching the same convention
+    already established in core/agent/agent.py's get_product_lookup_str() for datasets
+    with inconsistent per-row category values.
+    """
+    if not os.path.exists(ACTIVE_DATASET_PATH):
+        raise HTTPException(status_code=404, detail="No active dataset found.")
+    try:
+        df_clean = get_clean_df()
+        products = (
+            df_clean[['product_id', 'product_name', 'category']]
+            .drop_duplicates(subset=['product_id'])
+            .sort_values(by='product_id')
+        )
+        return {"products": products.to_dict(orient='records')}
+    except Exception as e:
+        import logging
+        logger = logging.getLogger("insightforge")
+        logger.error(f"Failed to build product catalog: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load product catalog. Please try again.")
+
+@router.get("/eda")
+async def get_eda_report(
+    product_ids: str = Query(None, description="Comma-separated product_id list"),
+    categories: str = Query(None, description="Comma-separated category list"),
+    start_date: str = Query(None, description="ISO date, inclusive lower bound"),
+    end_date: str = Query(None, description="ISO date, inclusive upper bound"),
+):
+    """
+    Performs EDA on the active dataset and returns statistics, seasonality data,
+    correlation values, revenue/inventory breakdowns, and outlier lists — optionally
+    filtered by product, category, and/or date range.
+
+    Cached in-memory (like /status) ONLY for the exact no-filter request, since that's
+    the one every page load hits by default and EDA generation is the most expensive
+    read-only computation in the app. Any filtered request always recomputes fresh —
+    filter combinations are unbounded, so caching them isn't worth the complexity, and
+    a pandas mask + groupby over the in-memory dataframe is fast even at 100k-200k rows.
     """
     global _cached_eda
     if not os.path.exists(ACTIVE_DATASET_PATH):
         raise HTTPException(status_code=404, detail="No active dataset found.")
 
-    if _cached_eda is not None:
+    has_filters = bool(product_ids or categories or start_date or end_date)
+
+    if not has_filters and _cached_eda is not None:
         return _cached_eda
 
     try:
         df_clean = get_clean_df()
-        eda_data = generate_eda_report(df_clean)
-        _cached_eda = eda_data
+        eda_data = generate_eda_report(
+            df_clean,
+            product_ids=product_ids.split(",") if product_ids else None,
+            categories=categories.split(",") if categories else None,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if not has_filters:
+            _cached_eda = eda_data
         return eda_data
     except Exception as e:
         import logging

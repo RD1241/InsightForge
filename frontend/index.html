@@ -223,6 +223,49 @@
                         </div>
                     </div>
 
+                    <!-- Filter Bar -->
+                    <div class="card glassmorphic filter-bar mt-6" id="eda-filter-bar">
+                        <div class="filter-bar-row">
+                            <div class="filter-control" id="product-filter-control">
+                                <button class="btn btn-secondary filter-dropdown-toggle" id="product-filter-toggle" type="button">
+                                    <i data-lucide="package"></i>
+                                    <span id="product-filter-label">All Products</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </button>
+                                <div class="filter-dropdown-panel hidden" id="product-filter-panel">
+                                    <input type="text" class="filter-search-input" id="product-filter-search" placeholder="Search products...">
+                                    <div class="filter-checkbox-list" id="product-filter-list"><!-- Dynamic --></div>
+                                    <div class="filter-dropdown-actions">
+                                        <button class="btn-link" id="product-filter-clear">Clear</button>
+                                        <button class="btn btn-primary btn-xs" id="product-filter-apply">Apply</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="filter-control" id="category-filter-control">
+                                <span class="filter-label">Category</span>
+                                <div class="filter-chip-group" id="category-filter-chips"><!-- Dynamic --></div>
+                            </div>
+                        </div>
+                        <div class="filter-bar-row">
+                            <div class="filter-control">
+                                <span class="filter-label">Date Range</span>
+                                <input type="date" class="filter-date-input" id="filter-start-date">
+                                <span class="text-secondary text-xs">to</span>
+                                <input type="date" class="filter-date-input" id="filter-end-date">
+                            </div>
+                            <div class="filter-control filter-quick-chips" id="date-quick-chips">
+                                <button class="btn-chip" data-range="30">Last 30 Days</button>
+                                <button class="btn-chip" data-range="quarter">This Quarter</button>
+                                <button class="btn-chip" data-range="year">This Year</button>
+                                <button class="btn-chip" data-range="all">All Time</button>
+                            </div>
+                            <button class="btn btn-secondary btn-xs hidden" id="filter-reset-btn">
+                                <i data-lucide="x-circle"></i> Reset Filters
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Charts Grid -->
                     <div class="grid grid-2 mt-6">
                         <!-- Sales Trendline -->
@@ -365,6 +408,90 @@
                                 <div class="chart-loader" id="loader-category">
                                     <div class="spinner"></div>
                                     <span>Comparing categories...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-2 mt-6">
+                        <!-- Revenue by Category -->
+                        <div class="card glassmorphic chart-card">
+                            <div class="card-header flex-row justify-between align-center">
+                                <h3>Revenue by Category</h3>
+                                <button class="btn btn-icon explain-chart-btn" data-chart="revenue_by_category"><i data-lucide="sparkles"></i> Explain</button>
+                            </div>
+                            <div class="card-body chart-wrapper">
+                                <div id="chart-revenue-category" class="plotly-container"></div>
+                                <div class="chart-loader" id="loader-revenue-category">
+                                    <div class="spinner"></div>
+                                    <span>Totaling revenue by category...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Monthly Revenue Trend -->
+                        <div class="card glassmorphic chart-card">
+                            <div class="card-header flex-row justify-between align-center">
+                                <h3>Monthly Revenue Trend</h3>
+                                <button class="btn btn-icon explain-chart-btn" data-chart="monthly_revenue_trend"><i data-lucide="sparkles"></i> Explain</button>
+                            </div>
+                            <div class="card-body chart-wrapper">
+                                <div id="chart-monthly-revenue" class="plotly-container"></div>
+                                <div class="chart-loader" id="loader-monthly-revenue">
+                                    <div class="spinner"></div>
+                                    <span>Charting revenue over time...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-2 mt-6">
+                        <!-- Stock Status Distribution -->
+                        <div class="card glassmorphic chart-card">
+                            <div class="card-header flex-row justify-between align-center">
+                                <h3>Inventory Health Distribution</h3>
+                                <button class="btn btn-icon explain-chart-btn" data-chart="stock_status_distribution"><i data-lucide="sparkles"></i> Explain</button>
+                            </div>
+                            <div class="card-body chart-wrapper">
+                                <div id="chart-stock-status" class="plotly-container"></div>
+                                <div class="chart-loader" id="loader-stock-status">
+                                    <div class="spinner"></div>
+                                    <span>Classifying stock health...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Promotion Impact -->
+                        <div class="card glassmorphic chart-card">
+                            <div class="card-header flex-row justify-between align-center">
+                                <h3>Promotion Impact on Demand</h3>
+                                <button class="btn btn-icon explain-chart-btn" data-chart="promotion_impact"><i data-lucide="sparkles"></i> Explain</button>
+                            </div>
+                            <div class="card-body chart-wrapper">
+                                <div id="chart-promotion-impact" class="plotly-container"></div>
+                                <div class="chart-loader" id="loader-promotion-impact">
+                                    <div class="spinner"></div>
+                                    <span>Comparing promo vs. non-promo demand...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fast / Slow Movers -->
+                    <div class="card glassmorphic mt-6">
+                        <div class="card-header">
+                            <div class="card-title-icon"><i data-lucide="gauge"></i></div>
+                            <h3>Fast &amp; Slow Movers <span class="text-secondary text-xs font-normal">(last 30 days vs. prior 30 days)</span></h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="grid grid-2">
+                                <div>
+                                    <div class="movers-list-title fastest"><i data-lucide="trending-up"></i> Fastest Growing</div>
+                                    <ul class="movers-list" id="movers-fastest-list"><!-- Dynamic --></ul>
+                                </div>
+                                <div>
+                                    <div class="movers-list-title slowest"><i data-lucide="trending-down"></i> Slowest Moving</div>
+                                    <ul class="movers-list" id="movers-slowest-list"><!-- Dynamic --></ul>
                                 </div>
                             </div>
                         </div>
