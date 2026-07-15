@@ -9,6 +9,15 @@ MODELS_STORE_DIR = os.path.join(BASE_DIR, "models_store")
 REGISTRY_JSON_PATH = os.path.join(MODELS_STORE_DIR, "models_registry.json")
 TRAINING_REPORT_PATH = os.path.join(MODELS_STORE_DIR, "training_report.json")
 
+# Current supported model lineup (see models.py). save_registry_batch() only ever merges
+# model entries into the registry, never removes them, so switching the lineup (as
+# happened when Random Forest / Linear Regression were replaced by Ridge / Gradient
+# Boosting) leaves stale entries behind indefinitely. get_product_models() filters on
+# this whitelist so every reader — best-model selection, /api/forecast/compare, and the
+# chat agent's model_comparison tool — is protected from ever selecting or surfacing a
+# model class that no longer exists in models.py.
+SUPPORTED_MODELS = {"Ridge Regression", "Gradient Boosting", "Prophet"}
+
 # Ensure models store exists
 os.makedirs(MODELS_STORE_DIR, exist_ok=True)
 
@@ -28,16 +37,16 @@ def get_recommendation_reason(model_name: str, metrics: dict) -> str:
             f"on the chronological validation set. Prophet is highly transparent and excels at decomposing "
             f"yearly and weekly seasonal patterns while adjusting for price and promotional surges."
         )
-    elif model_name == "Random Forest":
+    elif model_name == "Gradient Boosting":
         return (
-            f"Random Forest is recommended due to its superior validation metrics (MAE = {mae}, R² = {r2}). "
-            f"The ensemble of decision trees successfully captured complex, non-linear relationships and "
+            f"Gradient Boosting is recommended due to its superior validation metrics (MAE = {mae}, R² = {r2}). "
+            f"The boosted ensemble of decision trees successfully captured complex, non-linear relationships and "
             f"interactions between prices, promotion flags, and historical lag trends."
         )
-    elif model_name == "Linear Regression":
+    elif model_name == "Ridge Regression":
         return (
-            f"Linear Regression is recommended as it offered the lowest validation error (MAE = {mae}) "
-            f"during testing. It provides a simple, robust baseline that fits linear trends effectively "
+            f"Ridge Regression is recommended as it offered the lowest validation error (MAE = {mae}) "
+            f"during testing. It provides a simple, regularized baseline that fits linear trends effectively "
             f"without risk of overfitting on noisy retail sales data."
         )
     return f"Recommended based on lowest MAE on the validation set."
@@ -170,7 +179,10 @@ def get_product_models(product_id: str) -> list:
             with open(REGISTRY_JSON_PATH, "r") as f:
                 registry = json.load(f)
         if product_id in registry:
-            return list(registry[product_id].values())
+            return [
+                m for m in registry[product_id].values()
+                if m.get("model_name") in SUPPORTED_MODELS
+            ]
     except Exception as e:
         import logging
         logger = logging.getLogger("insightforge")

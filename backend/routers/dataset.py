@@ -8,6 +8,9 @@ from fastapi.responses import JSONResponse
 from core.forecasting.preprocessor import validate_dataset, clean_dataset
 from core.forecasting.synthetic_data import generate_synthetic_data
 from core.forecasting.eda import generate_eda_report
+from core.forecasting.registry import (
+    clear_model_cache, MODELS_STORE_DIR, REGISTRY_JSON_PATH, TRAINING_REPORT_PATH
+)
 
 router = APIRouter(prefix="/api/dataset", tags=["Dataset"])
 
@@ -194,6 +197,31 @@ async def load_demo_dataset():
         logger = logging.getLogger("insightforge")
         logger.error(f"Failed to load demo dataset: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to load demo dataset. Please try again.")
+
+@router.post("/clear")
+async def clear_dataset():
+    """
+    Clears the active dataset and every piece of derived state (in-memory caches,
+    trained model files, registry, training report) so the app returns to a genuine
+    "nothing loaded" state. Mirrors upload/load-demo's existing convention of clearing
+    in-memory caches before touching files on disk.
+    """
+    clear_status_cache()
+    clear_model_cache()
+
+    if os.path.exists(ACTIVE_DATASET_PATH):
+        os.remove(ACTIVE_DATASET_PATH)
+
+    if os.path.exists(REGISTRY_JSON_PATH):
+        os.remove(REGISTRY_JSON_PATH)
+    if os.path.exists(TRAINING_REPORT_PATH):
+        os.remove(TRAINING_REPORT_PATH)
+    if os.path.isdir(MODELS_STORE_DIR):
+        for fname in os.listdir(MODELS_STORE_DIR):
+            if fname.endswith(".pkl"):
+                os.remove(os.path.join(MODELS_STORE_DIR, fname))
+
+    return {"message": "Dataset and trained models cleared."}
 
 @router.get("/status")
 async def get_dataset_status():

@@ -1,8 +1,8 @@
 import os
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import Ridge
+from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -66,43 +66,6 @@ class BaseForecaster:
         """
         pass
 
-class LinearRegressionModel(BaseForecaster):
-    def __init__(self):
-        super().__init__()
-        self.model_name = "Linear Regression"
-        self.model = LinearRegression()
-        self.feature_cols = [
-            'price', 'promotion_flag', 'day_of_week', 'month', 'is_weekend', 'day_of_year',
-            'units_sold_lag_1', 'units_sold_lag_7', 'units_sold_lag_14',
-            'units_sold_roll_mean_7', 'units_sold_roll_mean_30', 'promo_lag_1'
-        ]
-        
-    def fit(self, train_df: pd.DataFrame):
-        X = train_df[self.feature_cols]
-        y = train_df['units_sold']
-        self.model.fit(X, y)
-        
-        # Calculate standard deviation of residuals for confidence intervals
-        preds_train = self.model.predict(X)
-        residuals = y - preds_train
-        self.residual_std = float(np.std(residuals))
-        
-    def predict(self, df: pd.DataFrame, step: int = 1) -> dict:
-        X = df[self.feature_cols]
-        preds = self.model.predict(X)
-        preds = np.maximum(0, preds)
-        
-        # Calculate step-dependent confidence interval: uncertainty grows over time
-        step_factor = np.sqrt(step)
-        lower_bound = np.maximum(0, preds - 1.96 * self.residual_std * step_factor)
-        upper_bound = preds + 1.96 * self.residual_std * step_factor
-        
-        return {
-            "predictions": np.round(preds, 2),
-            "lower_bound": np.round(lower_bound, 2),
-            "upper_bound": np.round(upper_bound, 2)
-        }
-
 class RidgeRegressionModel(BaseForecaster):
     def __init__(self):
         super().__init__()
@@ -144,11 +107,22 @@ class RidgeRegressionModel(BaseForecaster):
             "upper_bound": np.round(upper_bound, 2)
         }
 
-class RandomForestModel(BaseForecaster):
+class GradientBoostingModel(BaseForecaster):
+    """
+    Histogram-based gradient boosting (scikit-learn's HistGradientBoostingRegressor —
+    architecturally the same family as LightGBM/XGBoost, built into scikit-learn so no
+    new dependency is required). Chosen over the previous Random Forest model because
+    gradient-boosted trees are the empirically dominant approach for tabular retail demand
+    forecasting: in the M5 forecasting competition (the largest public retail-forecasting
+    benchmark, ~30,000 real product/store series), the top 50 submissions were all
+    tree-ensemble/gradient-boosting based. It also predicts faster per call than the prior
+    Random Forest, which matters here since the recursive validation loop calls .predict()
+    once per test day.
+    """
     def __init__(self):
         super().__init__()
-        self.model_name = "Random Forest"
-        self.model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+        self.model_name = "Gradient Boosting"
+        self.model = HistGradientBoostingRegressor(max_iter=200, random_state=42)
         self.feature_cols = [
             'price', 'promotion_flag', 'day_of_week', 'month', 'is_weekend', 'day_of_year',
             'units_sold_lag_1', 'units_sold_lag_7', 'units_sold_lag_14',
@@ -186,15 +160,23 @@ class ProphetModel(BaseForecaster):
         super().__init__()
         self.model_name = "Prophet"
         self.model = None
-        
+        # Raw (pre-standardization) training price bounds — Prophet z-scores
+        # 'price' internally during fit(), so self.model.history['price'] is NOT
+        # usable for this; these must be captured from the raw input separately.
+        self.train_price_min = None
+        self.train_price_max = None
+
     def fit(self, train_df: pd.DataFrame):
         if not PROPHET_AVAILABLE:
             raise ImportError("Prophet is not installed or failed to load.")
-            
+
         prophet_df = train_df[['date', 'units_sold', 'price', 'promotion_flag']].rename(
             columns={'date': 'ds', 'units_sold': 'y'}
         )
-        
+
+        self.train_price_min = float(prophet_df['price'].min())
+        self.train_price_max = float(prophet_df['price'].max())
+
         self.model = Prophet(
             yearly_seasonality=True,
             weekly_seasonality=True,
@@ -203,20 +185,35 @@ class ProphetModel(BaseForecaster):
         )
         self.model.add_regressor('price')
         self.model.add_regressor('promotion_flag')
-        
+
         self.model.fit(prophet_df)
-        
+
     def predict(self, df: pd.DataFrame, step: int = 1) -> dict:
         if not self.model:
             raise ValueError("Prophet model must be fitted before predicting.")
-            
+
         prophet_df = df[['date', 'price', 'promotion_flag']].rename(columns={'date': 'ds'})
+
+        # Clip the price regressor to the range Prophet actually trained on.
+        # Prophet's price coefficient is fit against whatever variance the training
+        # window happened to contain — for products with a near-constant historical
+        # price, that coefficient is poorly identified, and feeding a serve-time price
+        # outside that narrow range causes the additive model to extrapolate the trend
+        # term catastrophically (observed: correct-looking forecasts collapsing to a
+        # large negative yhat, clipped to a flat 0 by the max(0, ...) below). Clamping
+        # keeps every prediction inside the space Prophet was actually validated on.
+        train_min = getattr(self, 'train_price_min', None)
+        train_max = getattr(self, 'train_price_max', None)
+        if train_min is not None and train_max is not None:
+            prophet_df = prophet_df.copy()
+            prophet_df['price'] = prophet_df['price'].clip(lower=train_min, upper=train_max)
+
         forecast = self.model.predict(prophet_df)
-        
+
         preds = forecast['yhat'].values
         yhat_lower = forecast['yhat_lower'].values
         yhat_upper = forecast['yhat_upper'].values
-        
+
         return {
             "predictions": np.round(np.maximum(0, preds), 2),
             "lower_bound": np.round(np.maximum(0, yhat_lower), 2),

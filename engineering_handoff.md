@@ -122,7 +122,7 @@ d:/Project_C/
 | `uvicorn` | 0.30.1 | ASGI server; runs FastAPI |
 | `pandas` | 2.2.2 | Data manipulation and time series processing |
 | `numpy` | 1.26.4 | Numerical computation |
-| `scikit-learn` | 1.5.0 | Linear Regression, Ridge, Random Forest, metrics |
+| `scikit-learn` | 1.5.0 | Ridge, HistGradientBoostingRegressor, metrics |
 | `prophet` | 1.1.5 | Facebook Prophet additive time series model |
 | `httpx` | 0.27.0 | Async HTTP client for LLM API calls |
 | `python-dotenv` | 1.0.1 | `.env` file loading for config |
@@ -310,19 +310,17 @@ Before feature engineering, every product's time series is reindexed to the comp
 
 **Thread-Safe Registry**: `registry.py` uses a `threading.Lock()` (`_registry_lock`) around all read-modify-write operations on `models_registry.json` to prevent concurrent write corruption during parallel training.
 
-**Models Trained**:
+**Models Trained** (revised in §16 — see rationale there):
 
-1. **Linear Regression** — `sklearn.LinearRegression`. No regularization. Fast baseline. Confidence interval: `±1.96 * residual_std * √step`.
+1. **Ridge Regression** — `sklearn.Ridge(alpha=1.0)` inside a `Pipeline([StandardScaler, Ridge])`. L2 regularization prevents coefficient explosion on correlated lag features. Confidence interval: `±1.96 * residual_std * √step`. Kept as the interpretable linear baseline (plain Linear Regression was dropped — Ridge dominates it, so keeping both taught nothing extra).
 
-2. **Ridge Regression** — `sklearn.Ridge(alpha=1.0)` inside a `Pipeline([StandardScaler, Ridge])`. L2 regularization prevents coefficient explosion on correlated lag features. Confidence interval: same method as LR.
+2. **Gradient Boosting** — `sklearn.ensemble.HistGradientBoostingRegressor(max_iter=200, random_state=42)`. Histogram-based gradient boosting — the same algorithmic family as LightGBM, built into scikit-learn (no new dependency). Replaces Random Forest: gradient boosting is the empirically dominant approach for tabular retail forecasting (see §16.3), and it also trains ~4-5x faster per product than the Random Forest it replaced, since HistGradientBoostingRegressor predicts faster per call than a 100-tree Random Forest inside the recursive validation loop. Confidence interval: residual std from training set.
 
-3. **Random Forest** — `RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)`. Ensemble of 100 decision trees. Captures non-linear interactions. Confidence interval: residual std from training set.
-
-4. **Prophet** — `prophet.Prophet(yearly_seasonality=True, weekly_seasonality=True, daily_seasonality=False, interval_width=0.95)`. Additional regressors: `price`, `promotion_flag`. Native 95% credible intervals from Bayesian posterior.
+3. **Prophet** — `prophet.Prophet(yearly_seasonality=True, weekly_seasonality=True, daily_seasonality=False, interval_width=0.95)`. Additional regressors: `price`, `promotion_flag`. Native 95% credible intervals from Bayesian posterior.
 
 **Evaluation Protocol**:  
 
-- **Linear Regression, Ridge, Random Forest**: Recursive walk-forward validation. The model never sees future actuals during testing. Instead, each test-step prediction is appended to the lag buffer and used as input for the next step. This replicates the exact production forecasting strategy.
+- **Ridge, Gradient Boosting**: Recursive walk-forward validation. The model never sees future actuals during testing. Instead, each test-step prediction is appended to the lag buffer and used as input for the next step. This replicates the exact production forecasting strategy.
 
 - **Prophet**: Direct `model.predict(test_df)` on the test date range. Prophet is an additive regression model fitted on the datetime `ds` field — it does not use autoregressive lag features and therefore does not require recursive multi-step simulation. This methodological difference is explicitly documented in code.
 
@@ -567,10 +565,9 @@ build_features()            ← Calendar + lag + rolling features (no leakage)
      ▼
 ThreadPoolExecutor          ← Parallel training per product (max 4 workers)
      │
-     ├── Linear Regression → recursive walk-forward eval → save_model()
-     ├── Ridge Regression  → recursive walk-forward eval → save_model()
-     ├── Random Forest     → recursive walk-forward eval → save_model()
-     └── Prophet           → native predict() eval → save_model()
+     ├── Ridge Regression   → recursive walk-forward eval → save_model()
+     ├── Gradient Boosting  → recursive walk-forward eval → save_model()
+     └── Prophet            → native predict() eval → save_model()
      │
      ▼
 Best model selected (lowest MAE, positive R² filter)
@@ -745,7 +742,7 @@ Separating classification from synthesis prevents the analyst LLM from both rout
 
 ### Long-Term Vision (Architecture Evolution)
 
-- **XGBoost / LightGBM Models**: Add gradient boosting models as additional competitors. XGBoost typically outperforms Random Forest on tabular retail data and is highly competitive with Prophet for non-seasonal products.
+- ~~**XGBoost / LightGBM Models**: Add gradient boosting models as additional competitors.~~ **Done in §16** — Random Forest was replaced with scikit-learn's `HistGradientBoostingRegressor` (LightGBM's algorithmic family, zero new dependency).
 - **DeepAR / LSTM Integration**: Add deep learning sequence models (Amazon DeepAR, LSTM) via PyTorch for products with complex, non-linear demand patterns.
 - **Multi-Product Cross-Learning**: Train a single global model on all products simultaneously (with product embeddings as features) instead of independent per-product models. Useful for products with insufficient individual history.
 - **Real-Time Data Integration**: Replace CSV upload with a live database or data warehouse connector (BigQuery, Snowflake, PostgreSQL) for continuous ingestion of point-of-sale transactions.
@@ -770,7 +767,7 @@ The inventory planning logic is centralized in Python (`train_pipeline.py`):
   \[\text{Score} = \text{Projected Revenue} - \text{Revenue at Risk}\]
 
 ### 14.3 Learning Center drawer
-- **Glossary & Explanation**: Built a sliding help drawer that provides context-aware model descriptions (e.g. why Prophet was selected over Random Forest based on validation performance) and uses LaTeX math formatting (rendered via KaTeX CDN) to explain MAE, MAPE, and R² metrics in clear business terms.
+- **Glossary & Explanation**: Built a sliding help drawer that provides context-aware model descriptions (e.g. why Prophet was selected over Gradient Boosting based on validation performance) and uses LaTeX math formatting (rendered via KaTeX CDN) to explain MAE, MAPE, and R² metrics in clear business terms.
 
 ### 14.4 Performance & Stability Audits
 - **Async Event Loop Offloading**: Transformed predictive endpoints to run CPU-bound ML recursive predictions in worker threads using `asyncio.to_thread`.
@@ -817,4 +814,39 @@ Version 3.0 redesigns the complete user experience around the **30-second rule**
 
 ---
 
-*This document was generated as the final engineering handoff for InsightForge v3.0.0 following the Version 3.0 development and redesign phases.*
+## 16. Version 3.2 — Manager-First Redesign, Backend Scale Optimization, and Model Lineup Upgrade
+
+### 16.1 Manager-first presentation layer (frontend-only, no forecasting logic touched)
+Repositioned the product from "ML dashboard" to "Retail Business Intelligence SaaS" using an explicit information hierarchy — **Executive Decision → Business Insight → Supporting Evidence → Technical Details** — applied consistently instead of interleaving technical and business content:
+- **Forecast page** restructured into four labeled tiers: *Today's Recommendation* (a 5-line plain-English checklist replacing the old one-sentence AI Action banner), *Business Overview* (the existing 6-tile KPI grid, demoted below the recommendation), *Forecast* (chart + What-If simulator + AI recommendation), and *Technical Details* (metrics table + model override control, both now behind a single `<details class="technical-details-disclosure">`).
+- **Sales Insights** correlation section flipped: a plain-language "Sales are strongly influenced by ✓ Promotions ✓ Weekend shopping..." checklist is now the primary view; the raw correlation heatmap moved into a "View Detailed Analysis" disclosure, lazy-drawn on open (Plotly cannot size itself inside a closed `<details>` at draw time).
+- **Learning Center** Glossary cards now lead with a business question ("How far off are my forecasts, on average?") instead of the raw metric name; formulas and technical definitions moved into a nested Advanced Technical Details section per card.
+- **Retail AI Assistant → Retail Business Advisor**: renamed throughout (chat header, welcome message, typing indicator); quick actions were already business-framed and needed no change.
+- Fixed two real bugs found during this pass: `getModelFriendlyLabel()` compared against stale string literals (`"Ridge"`/`"LinearRegression"`) that never matched the real values (`"Ridge Regression"`/`"Linear Regression"`), so friendly model names silently fell back to raw text for those two models; and the Learning Center's Glossary tab button had no click handler at all (a pre-existing latent bug, unrelated to this redesign, found while verifying it).
+
+### 16.2 Backend scale optimization
+Benchmarked the pipeline against synthetic datasets at 10k/50k/100k/200k rows (`backend/scratch/benchmark_scale.py`) before optimizing anything, per the target of comfortably handling ~100k-200k row / 50-200+ column retail datasets on typical developer hardware. Findings and fixes:
+
+| Bottleneck found | Fix | Measured impact |
+|---|---|---|
+| `/api/dataset/eda` recomputed the full EDA report from scratch on every page visit | In-memory cache mirroring the existing `_cached_status` pattern, invalidated on upload/demo-load | 6.46s → ~0ms on repeat loads (200k rows) |
+| `agent.py` and `/predict` each re-ran `clean_dataset()` independently instead of reusing the existing cache | Routed through the existing `get_clean_df()` cache | Removes ~0.66s of redundant work per chat message / forecast call at 200k rows |
+| `registry.py`'s `save_model()` did a full read-modify-write of `models_registry.json` per model (4x per product) | Batched to one registry write per full training run (`save_registry_batch()`) | Isolated simulation: 300 sequential per-model writes cost 1.99s cumulative and scaled worse than linearly (O(n²)) — full-run batching eliminates this entirely |
+| `smooth_outliers()` looped per-product with manual `.loc` writes | Replaced with `groupby(...).transform()`; output verified byte-identical to the original across 6 test cases including edge conditions | Removes per-product loop/indexing overhead; core MAD computation untouched |
+| Training report writes (`save_training_report`) were unlocked while model registry writes already were | Added a lock, mirroring the existing `_registry_lock` | Closes a race between overlapping `/train` calls |
+| Chat session history read-modify-write had no lock | Added an `RLock` around the full read-append-write cycle | Closes a race between concurrent messages on the same `session_id` |
+
+All five changes are in the support/caching layer; no forecasting logic, feature engineering, or model implementation was touched. `verify_pipeline.py`, `verify_training.py`, and `verify_agent.py` all pass.
+
+### 16.3 Model lineup: Random Forest + Linear Regression → Gradient Boosting
+Replaced the 4-model lineup (Linear Regression, Ridge, Random Forest, Prophet) with a research-backed 3-model lineup:
+
+1. **Ridge Regression** — kept as the interpretable linear baseline. Plain Linear Regression was dropped: Ridge is always equal-or-better due to L2 regularization, so training both never demonstrated anything Ridge alone didn't.
+2. **Gradient Boosting** (`sklearn.ensemble.HistGradientBoostingRegressor`) — replaces Random Forest. This is evidence-based, not a preference: in the [M5 forecasting competition](https://medium.com/artefact-engineering-and-data-science/sales-forecasting-in-retail-what-we-learned-from-the-m5-competition-445c5911e2f6) — the largest public retail-demand-forecasting benchmark (~30,000 real Walmart product/store series) — the **top 50 submissions were all tree-ensemble/gradient-boosting based**. Multiple 2025 comparative studies ([arXiv:2311.00993](https://arxiv.org/pdf/2311.00993), [arXiv:2506.05941](https://arxiv.org/html/2506.05941v2)) confirm gradient boosting consistently outperforms bagged ensembles like Random Forest on tabular retail sales data, while Prophet remains the right tool specifically for seasonality/holiday effects. `HistGradientBoostingRegressor` was chosen over LightGBM/XGBoost specifically because it's histogram-based gradient boosting from the same algorithmic family, already included via the existing `scikit-learn` dependency — zero new packages, same "keep it understandable, no unnecessary complexity" constraint the rest of the project follows.
+3. **Prophet** — unchanged; already the strongest performer on real validation data in this project (e.g. PRD_01: MAE 6.42–6.71 across runs) and the literature-backed choice for seasonality.
+
+Measured effect on the existing demo dataset: Gradient Boosting fits and recursively validates a product in **~0.33-0.35s** (after one-time warmup), versus Random Forest's previously-measured ~1.4-1.7s per product — roughly 4-5x faster, which also meaningfully improves total training wall time as product count grows.
+
+---
+
+*This document was updated to reflect the Version 3.2 manager-first redesign, backend scale optimization, and model lineup upgrade. Prior sections describing Random Forest/Linear Regression or the 4-model lineup have been revised in place where they conflicted; §16 is the authoritative summary of what changed and why.*

@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 # Import other core modules
 from core.forecasting.preprocessor import clean_dataset, aggregate_to_product_level, build_features, smooth_outliers
 from core.forecasting.models import (
-    LinearRegressionModel, RandomForestModel, ProphetModel, RidgeRegressionModel,
+    GradientBoostingModel, ProphetModel, RidgeRegressionModel,
     evaluate_predictions, PROPHET_AVAILABLE
 )
 from core.forecasting.registry import (
@@ -103,21 +103,12 @@ def _train_single_product(pid: str, df_features: pd.DataFrame, prophet_available
         
     y_test = test_df['units_sold'].values
     models_trained = {}
-    # Staged registry entries for this product's 4 models — returned to the caller, which
+    # Staged registry entries for this product's models — returned to the caller, which
     # batches every product's entries into a single registry write for the whole run
     # instead of one read-modify-write per model here.
     registry_entries = {}
 
-    # --- Model 1: Linear Regression ---
-    lr_model = LinearRegressionModel()
-    lr_model.fit(train_df)
-    lr_preds = _recursive_validation_predict(lr_model, train_df, test_df)
-    lr_metrics = evaluate_predictions(y_test, lr_preds)
-    lr_filename, _ = save_model_file(pid, "Linear Regression", lr_model)
-    registry_entries["Linear Regression"] = {"metrics": lr_metrics, "filename": lr_filename}
-    models_trained["Linear Regression"] = lr_metrics
-
-    # --- Model 2: Ridge Regression ---
+    # --- Model 1: Ridge Regression (interpretable linear baseline) ---
     ridge_model = RidgeRegressionModel()
     ridge_model.fit(train_df)
     ridge_preds = _recursive_validation_predict(ridge_model, train_df, test_df)
@@ -126,20 +117,20 @@ def _train_single_product(pid: str, df_features: pd.DataFrame, prophet_available
     registry_entries["Ridge Regression"] = {"metrics": ridge_metrics, "filename": ridge_filename}
     models_trained["Ridge Regression"] = ridge_metrics
 
-    # --- Model 3: Random Forest ---
-    rf_model = RandomForestModel()
-    rf_model.fit(train_df)
-    rf_preds = _recursive_validation_predict(rf_model, train_df, test_df)
-    rf_metrics = evaluate_predictions(y_test, rf_preds)
-    rf_filename, _ = save_model_file(pid, "Random Forest", rf_model)
-    registry_entries["Random Forest"] = {"metrics": rf_metrics, "filename": rf_filename}
-    models_trained["Random Forest"] = rf_metrics
+    # --- Model 2: Gradient Boosting (replaces Random Forest — see models.py for rationale) ---
+    gb_model = GradientBoostingModel()
+    gb_model.fit(train_df)
+    gb_preds = _recursive_validation_predict(gb_model, train_df, test_df)
+    gb_metrics = evaluate_predictions(y_test, gb_preds)
+    gb_filename, _ = save_model_file(pid, "Gradient Boosting", gb_model)
+    registry_entries["Gradient Boosting"] = {"metrics": gb_metrics, "filename": gb_filename}
+    models_trained["Gradient Boosting"] = gb_metrics
 
-    # --- Model 4: Prophet (if available) ---
+    # --- Model 3: Prophet (if available) ---
     # NOTE ON EVALUATION METHODOLOGY (CRIT-02):
     # Prophet operates as an additive regression model fitting trend and seasonal Fourier series using
-    # the datetime ds field directly. Unlike recursive autoregressive ML models (Linear/Ridge Regression,
-    # Random Forest) which rely on lag features constructed step-by-step from predictions during validation,
+    # the datetime ds field directly. Unlike recursive autoregressive ML models (Ridge Regression,
+    # Gradient Boosting) which rely on lag features constructed step-by-step from predictions during validation,
     # Prophet does not use lagged features. Thus, Prophet is evaluated by invoking its native
     # prophet_model.predict(test_df) API directly on the test dates, rather than inside the recursive validation
     # loop. This methodological difference is mathematically sound and matches how each model serves in production.

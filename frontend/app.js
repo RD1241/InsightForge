@@ -34,7 +34,8 @@ document.addEventListener("DOMContentLoaded", () => {
             eda: 0,
             forecast: 0
         },
-        isTraining: false
+        isTraining: false,
+        chatSessionId: null
     };
 
     // --- API Service Wrapper ---
@@ -171,6 +172,7 @@ document.addEventListener("DOMContentLoaded", () => {
         headerStatusCard: document.getElementById("header-status-card"),
         headerDatasetName: document.getElementById("header-dataset-name"),
         headerDatasetBadge: document.getElementById("header-dataset-badge"),
+        clearDatasetBtn: document.getElementById("clear-dataset-btn"),
         
         // Navigation items
         navEda: document.getElementById("nav-eda"),
@@ -210,6 +212,7 @@ document.addEventListener("DOMContentLoaded", () => {
         registryAvgMae: document.getElementById("registry-avg-mae") || null,
         registryAvgMape: document.getElementById("registry-avg-mape") || null,
         forecastWorkspace: document.getElementById("forecast-workspace"),
+        forecastWorkspaceLabel: document.getElementById("forecast-workspace-label"),
         forecastProductSelect: document.getElementById("forecast-product-select"),
         forecastModelSelect: document.getElementById("forecast-model-select"),
         forecastHorizonSelect: document.getElementById("forecast-horizon-select"),
@@ -238,6 +241,8 @@ document.addEventListener("DOMContentLoaded", () => {
         loaderCorrelation: document.getElementById("loader-correlation"),
         loaderWeekly: document.getElementById("loader-weekly"),
         loaderMonthly: document.getElementById("loader-monthly"),
+        loaderTopProducts: document.getElementById("loader-top-products"),
+        loaderCategory: document.getElementById("loader-category"),
         loaderForecast: document.getElementById("loader-forecast"),
         
         // Chat Panel
@@ -282,11 +287,12 @@ document.addEventListener("DOMContentLoaded", () => {
             decision: "Allows you to adjust warehouse storage capacities, arrange bulk logistics, and plan store staffing schedules to align with high-demand cycles."
         },
         correlation_matrix: {
-            title: "Feature Correlation Matrix",
-            summary: "A correlation heatmap showing statistical linear associations between key demand drivers.",
-            what: "This color-coded matrix grids variables against each other. Coefficients range from -1.0 (perfect inverse relationship) through 0.0 (no correlation) to +1.0 (perfect positive correlation).",
-            learn: "Identifies whether promotions drive sales, how price hikes affect demand volume (price elasticity), and the role weekend flags play in traffic.",
-            decision: "Informs price optimization plans (pricing bounds) and lets you decide if a promotion is statistically viable enough to warrant inventory pre-purchasing."
+            title: "Key Sales Drivers",
+            businessTitle: "Why is demand changing?",
+            summary: "Shows which factors — promotions, pricing, weekends, stock levels — move your sales the most, and in which direction.",
+            what: "A short list of the factors most linked to your sales, in plain language. Anyone who wants the underlying statistics can open \"View Detailed Analysis\" for the full correlation matrix and coefficients.",
+            learn: "Identifies whether promotions drive sales, how price hikes affect demand, and the role weekends play in store traffic.",
+            decision: "Informs pricing plans and lets you decide if a promotion is worth stocking up for in advance."
         },
         weekly_seasonality: {
             title: "Weekly Demand Profile",
@@ -308,12 +314,29 @@ document.addEventListener("DOMContentLoaded", () => {
             what: "Solid line displays actual past sales. Dashed line represents forecasted future sales. The shaded area represents the 95% confidence interval (safety buffer zone).",
             learn: "Shows where demand is expected to rise or fall, the size of future promotional spikes, and the expanding uncertainty cone over time.",
             decision: "Guides purchase order quantities. Order up to the upper bound to ensure high service level (prevent stockouts), or order near the prediction line to minimize holding capital."
+        },
+        top_products: {
+            title: "Top Selling Products",
+            businessTitle: "Which products sell the most?",
+            summary: "Your 5 best-selling products, ranked by total units sold across the loaded dataset.",
+            what: "A horizontal bar for each product — the longer the bar, the more units it has sold. The value at the tip of each bar is the exact total.",
+            learn: "Shows which products carry your sales volume, and how much of a gap there is between your best seller and the rest of the top 5.",
+            decision: "Prioritize shelf space, marketing, and stock buffers on these products first — a stockout here costs more revenue than a stockout on a slow mover."
+        },
+        category_performance: {
+            title: "Sales by Category",
+            businessTitle: "Which product categories drive the business?",
+            summary: "Total units sold in each product category, ranked highest to lowest.",
+            what: "A horizontal bar per category — the longer the bar, the more that category has sold in total.",
+            learn: "Identifies which categories are carrying the business and which are underperforming, independent of any single product's performance.",
+            decision: "Informs category-level decisions: where to expand assortment, where to negotiate better supplier terms, and where a whole category (not just one product) may need attention."
         }
     };
 
     const METRICS_EXPLAINER = {
         MAE: {
             title: "MAE (Mean Absolute Error)",
+            businessTitle: "How far off are my forecasts, on average?",
             target: "Lower is better",
             definition: "The average absolute difference between the predicted sales and the actual sales volume.",
             business: "Tells you how many units your forecast is off by on average per day. If MAE is 5.0, your daily purchase orders will deviate from real demand by approximately 5 units (either over or under).",
@@ -326,6 +349,7 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         MAPE: {
             title: "MAPE (Mean Absolute Percentage Error)",
+            businessTitle: "How accurate is this forecast overall?",
             target: "Lower is better",
             definition: "The average relative percentage deviation of predicted sales from actual sales volume.",
             business: "Represents the percentage error relative to actual sales. For instance, a MAPE of 8% means your forecasts are off by 8% of the true sales volume on average. Under 10% is considered outstanding for retail.",
@@ -338,6 +362,7 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         RMSE: {
             title: "RMSE (Root Mean Squared Error)",
+            businessTitle: "Does the model ever miss badly?",
             target: "Lower is better",
             definition: "The square root of the average of squared differences between predictions and actual observations.",
             business: "Similar to MAE, but because errors are squared before averaging, RMSE penalizes large forecasting errors heavily. If RMSE is much larger than MAE, the model occasionally makes huge misses.",
@@ -350,6 +375,7 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         R2: {
             title: "R² (Coefficient of Determination)",
+            businessTitle: "How much can I trust this forecast?",
             target: "Higher is better (Closer to 1.0)",
             definition: "The proportion of variance in the sales target variable that is predictable from the model features.",
             business: "Indicates how much of your demand fluctuations (weekend surges, promotional spikes) the model explains. A value of 0.85 means the model captures 85% of demand volatility. Negative values indicate the model performs worse than a simple historical mean.",
@@ -362,6 +388,7 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         CI: {
             title: "Confidence Interval (Safety Bounds)",
+            businessTitle: "What's my safety stock buffer?",
             target: "Narrower intervals imply higher certainty",
             definition: "The mathematical range displaying the boundaries within which actual sales will fall 95% of the time.",
             business: "Defines the inventory safety stock zone. Slicing near the upper confidence limit ensures a 97.5% protection level against stockouts during random demand surges. Slicing the lower limit protects against capital tied up in slow-movers.",
@@ -386,35 +413,20 @@ document.addEventListener("DOMContentLoaded", () => {
             ],
             when: "Best for consumer products with clear weekly/yearly seasonality cycles, stable long-term trend lines, and where promotions have direct, additive demand impacts."
         },
-        "Random Forest": {
-            name: "Random Forest Regressor (Decision Tree Ensemble)",
-            description: "An ensemble learning method that fits a multitude of decision trees during training and outputs the average prediction of the individual trees to reduce variance.",
-            works: "Constructs $N$ independent decision trees using bootstrap aggregation (bagging). At each node split, it queries a random subset of features (like lag sales, prices, weekends). The final forecast is the averaged voting consensus of all trees, avoiding overfitting.",
+        "Gradient Boosting": {
+            name: "Gradient Boosting Regressor (Boosted Decision Trees)",
+            description: "An ensemble learning method that builds decision trees sequentially, where each new tree corrects the errors of the trees built before it — the empirically dominant approach for tabular retail demand forecasting (it swept the top solutions in the M5 forecasting competition, the largest public retail-forecasting benchmark).",
+            works: "Builds $N$ decision trees one at a time using a histogram-based algorithm (the same family as LightGBM). Each new tree is fit to the residual errors of the ensemble so far, and the final forecast is the sum of all trees' contributions, gradually reducing error.",
             advantages: [
                 "Highly effective at capturing complex, non-linear interactions between variables (e.g. promotion combined with weekend price drops).",
                 "Handles feature interactions (lags vs pricing) automatically without manual scaling.",
-                "Ensemble structure prevents overfitting to random noise in the sales data."
+                "Consistently outperforms bagged ensembles (like Random Forest) on tabular retail data in published benchmarks."
             ],
             limitations: [
                 "Cannot extrapolate trends outside the range of historical training values.",
                 "Requires careful lag engineering; if daily data has gaps, predictions fail."
             ],
             when: "Ideal for products with highly complex, interactive demand drivers (such as promotions, competitor price cuts, or holiday events) and informative historic lags."
-        },
-        "Linear Regression": {
-            name: "Linear Regression (Ordinary Least Squares)",
-            description: "A standard statistical model that assumes a linear relationship between the input features (price, promotions, lags) and the target sales volume.",
-            works: "Fits a linear equation of the form: $y = \\beta_0 + \\beta_1 X_1 + \\beta_2 X_2 + \\dots + \\beta_p X_p$, minimizing the sum of squared residuals between predicted sales and actual training data.",
-            advantages: [
-                "Extremely fast to train and mathematically transparent.",
-                "Low risk of overfitting on noisy sales data if features are kept simple.",
-                "Acts as an excellent, clear baseline benchmark for other complex ML models."
-            ],
-            limitations: [
-                "Assumes relationships are linear, which is rarely true for price changes or seasonality.",
-                "Extremely sensitive to collinearity between features (e.g. lag 1 and lag 7 sales)."
-            ],
-            when: "Best used as a baseline reference model, or for products with very steady, predictable, linear sales trajectories."
         },
         "Ridge Regression": {
             name: "Ridge Regression (L2 Regularized Linear Model)",
@@ -480,15 +492,15 @@ document.addEventListener("DOMContentLoaded", () => {
             
             if (state.activePage === "data-hub") {
                 pageTitle = "Data Hub Workspace";
-                pageDesc = "This workspace processes and validates uploaded CSV retail sales data. Before modeling, the preprocessor cleans transactions, aggregates store records to a product-level daily grid, and fills missing values. Lags are constructed chronologically to prevent temporal data leakage.";
+                pageDesc = "This is where your sales data gets checked and prepared. We validate your file, fill in any gaps, and organize it by product and day so it's ready for accurate forecasting.";
                 pageIcon = "database";
             } else if (state.activePage === "eda") {
-                pageTitle = "Exploratory Data Analysis";
-                pageDesc = "Examines historical sales trends, detects extreme anomalies using the IQR outlier detection technique, and maps coefficients in a correlation matrix. Visualizing these attributes identifies seasonality profiles and variables that influence volume.";
+                pageTitle = "Sales Insights";
+                pageDesc = "A look at what's actually happening in your business — sales trends over time, which days and months are busiest, unusual spikes worth knowing about, and what's driving demand.";
                 pageIcon = "pie-chart";
             } else if (state.activePage === "forecasting") {
                 pageTitle = "Forecasting Workspace";
-                pageDesc = "Evaluates baseline linear regression, Ridge regularization, Random Forest ensembles, and Prophet curves. Models are validated using a chronological 30-day out-of-sample holdout set. Predictions are generated recursively step-by-step.";
+                pageDesc = "Our AI tests several forecasting approaches for each product and automatically picks the one that predicts your future sales most accurately, based on how well it performed against your real historical data.";
                 pageIcon = "trending-up";
             }
 
@@ -514,7 +526,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             <div class="learning-card-header">
                                 <span class="learning-card-title">
                                     <i data-lucide="sparkles" class="accent-color" style="width: 14px; height: 14px;"></i>
-                                    Chart Explainer: ${escapeHtml(chartInfo.title)}
+                                    ${escapeHtml(chartInfo.businessTitle || chartInfo.title)}
                                 </span>
                             </div>
                             <div class="learning-card-body flex-col gap-2">
@@ -559,8 +571,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         let baselineMae = null;
                         if (prodData.all_models["Ridge Regression"]) {
                             baselineMae = prodData.all_models["Ridge Regression"].MAE;
-                        } else if (prodData.all_models["Linear Regression"]) {
-                            baselineMae = prodData.all_models["Linear Regression"].MAE;
                         }
                         
                         let pctImprovementText = "";
@@ -578,18 +588,12 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <li><strong>Bayesian Confidence Cones</strong>: Maintained narrow, reliable uncertainty bands based on historical posterior sampling.</li>
                                 <li><strong>Lowest Validation Loss</strong>: Outperformed lag-based models on the out-of-sample test set (MAE = ${metrics.MAE}).${pctImprovementText ? ` ${pctImprovementText}` : ''}</li>
                             `;
-                        } else if (modelName === "Random Forest") {
+                        } else if (modelName === "Gradient Boosting") {
                             choiceBullets = `
-                                <li><strong>Non-Linear Interactions</strong>: The ensemble of decision trees mapped complex, multi-variable interactions (e.g. price drops on weekends during promotions).</li>
+                                <li><strong>Non-Linear Interactions</strong>: The boosted ensemble of decision trees mapped complex, multi-variable interactions (e.g. price drops on weekends during promotions).</li>
                                 <li><strong>Autoregressive Lags</strong>: Recursive features (lags 1, 7, 14) proved highly informative for projecting recent momentum.</li>
-                                <li><strong>Outlier Robustness</strong>: Bagging reduced variance and prevented anomalous sales surges from corrupting predictions.</li>
+                                <li><strong>Error Correction</strong>: Each successive tree corrected the residual errors of the ensemble so far, sharpening accuracy round by round.</li>
                                 <li><strong>Superior Performance</strong>: Minimized test-set residuals (R² = ${metrics.R2}, MAE = ${metrics.MAE}).${pctImprovementText ? ` ${pctImprovementText}` : ''}</li>
-                            `;
-                        } else if (modelName === "Linear Regression") {
-                            choiceBullets = `
-                                <li><strong>Simple Steady Trajectory</strong>: Sales follow a stable linear trend line without high non-linear volatility.</li>
-                                <li><strong>Overfitting Prevention</strong>: High parameter constraints kept prediction variances low on noisy retail data.</li>
-                                <li><strong>Baseline Performance</strong>: Outperformed complex models by avoiding parameter inflation on a short history.</li>
                             `;
                         } else if (modelName === "Ridge Regression") {
                             choiceBullets = `
@@ -609,30 +613,38 @@ document.addEventListener("DOMContentLoaded", () => {
                                 </div>
                                 <div class="learning-card-body flex-col gap-2">
                                     <p>${escapeHtml(modelInfo.description)}</p>
-                                    <div style="margin-top: 4px;">
-                                        <strong>How it works:</strong>
-                                        <p class="text-xs text-secondary mt-1">${modelInfo.works}</p>
-                                    </div>
-                                    
+
                                     <div style="margin-top: 6px;">
                                         <strong class="accent-color">Why is this model recommended?</strong>
                                         <ul class="bullets-list mt-1" style="font-size: 0.72rem; padding-left: 1rem; color: var(--text-secondary);">
                                             ${choiceBullets}
                                         </ul>
                                     </div>
-                                    
-                                    <div style="margin-top: 6px;">
-                                        <strong>Advantages:</strong>
-                                        <ul class="bullets-list mt-1" style="font-size: 0.7rem; padding-left: 1rem;">
-                                            ${modelInfo.advantages.map(a => `<li>${escapeHtml(a)}</li>`).join("")}
-                                        </ul>
-                                    </div>
-                                    <div style="margin-top: 4px;">
-                                        <strong>Limitations:</strong>
-                                        <ul class="bullets-list mt-1" style="font-size: 0.7rem; padding-left: 1rem;">
-                                            ${modelInfo.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join("")}
-                                        </ul>
-                                    </div>
+
+                                    <details class="technical-details-disclosure mt-2">
+                                        <summary class="cursor-pointer text-xs font-semibold text-secondary flex-row align-center gap-2" style="user-select: none; outline: none; list-style: none;">
+                                            <i data-lucide="settings" style="width:12px;height:12px;color:var(--accent);"></i>
+                                            Advanced Technical Details
+                                        </summary>
+                                        <div class="mt-2">
+                                            <div style="margin-top: 4px;">
+                                                <strong>How it works:</strong>
+                                                <p class="text-xs text-secondary mt-1">${modelInfo.works}</p>
+                                            </div>
+                                            <div style="margin-top: 6px;">
+                                                <strong>Advantages:</strong>
+                                                <ul class="bullets-list mt-1" style="font-size: 0.7rem; padding-left: 1rem;">
+                                                    ${modelInfo.advantages.map(a => `<li>${escapeHtml(a)}</li>`).join("")}
+                                                </ul>
+                                            </div>
+                                            <div style="margin-top: 4px;">
+                                                <strong>Limitations:</strong>
+                                                <ul class="bullets-list mt-1" style="font-size: 0.7rem; padding-left: 1rem;">
+                                                    ${modelInfo.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join("")}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </details>
                                     <button class="ask-ai-center-btn" id="ask-ai-model-btn" data-model="${modelName}">
                                         <i data-lucide="message-square"></i>
                                         Ask AI Analyst for Deeper Review
@@ -657,10 +669,10 @@ document.addEventListener("DOMContentLoaded", () => {
                         </div>
                         <div class="learning-card-body flex-col gap-2">
                             <p><strong>Product:</strong> ${escapeHtml(fData.product_name)} (${escapeHtml(fData.product_id)})</p>
-                            <p>The 30-day forecast is generated by feeding sequential predictions back into lag matrices (recursive forecasting). The shaded boundary displays the 95% confidence bounds (safety zone).</p>
+                            <p>This forecast is built day-by-day, with each predicted day feeding into the next — so it adapts as trends develop. The shaded band on the chart shows the safety margin: how much actual sales could reasonably vary from the prediction.</p>
                             <div style="margin-top: 4px;">
                                 <strong>Safety stock recommendation:</strong>
-                                <p class="text-xs text-secondary mt-1">To ensure a 97.5% service level against weekend spikes or demand volatility, order inventory up to the <strong>Upper Confidence Bound</strong>.</p>
+                                <p class="text-xs text-secondary mt-1">To stay protected against weekend spikes or unexpected demand, order enough stock to cover the <strong>top of the shaded band</strong>, not just the predicted line.</p>
                             </div>
                         </div>
                     </div>
@@ -672,7 +684,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 html += `
                     <div class="learning-card" style="text-align: center; padding: 2rem 1rem;">
                         <i data-lucide="lock" style="width: 32px; height: 32px; margin: 0 auto 10px; color: var(--text-secondary);"></i>
-                        <p class="text-xs text-secondary">Please complete model training to unlock dynamic model performance explainers and selection heuristics.</p>
+                        <p class="text-xs text-secondary">Train your forecasting models to unlock a plain-language explanation of how each product's forecast was chosen.</p>
                     </div>
                 `;
             }
@@ -737,26 +749,37 @@ document.addEventListener("DOMContentLoaded", () => {
                         <div class="learning-card-header">
                             <span class="learning-card-title">
                                 <i data-lucide="help-circle" class="accent-color" style="width: 14px; height: 14px;"></i>
-                                ${escapeHtml(metric.title)}
+                                <span>
+                                    ${escapeHtml(metric.businessTitle || metric.title)}
+                                    <span class="text-2xs text-secondary block" style="font-weight: 400; margin-top: 1px;">${escapeHtml(metric.title)}</span>
+                                </span>
                             </span>
                             ${ratingHtml}
                         </div>
                         <div class="glossary-details">
                             <div class="learning-card-body flex-col gap-2">
-                                <p><strong>Definition:</strong> ${escapeHtml(metric.definition)}</p>
-                                <div style="margin-top: 4px;">
+                                <div>
                                     <strong>Business Meaning:</strong>
                                     <p class="text-xs text-secondary mt-1">${escapeHtml(metric.business)}</p>
                                 </div>
-                                <div style="margin-top: 4px;">
-                                    <strong>Target Optimization:</strong>
-                                    <p class="text-xs text-secondary mt-1">Goal: <span class="accent-color" style="font-weight: 600;">${escapeHtml(metric.target)}</span></p>
-                                </div>
                                 ${datasetInterpretationHtml}
-                                <div style="margin-top: 4px;">
-                                    <strong>Mathematical Formula:</strong>
-                                    <div class="metric-math" id="math-formula-${key}" data-formula="${metric.formula}"></div>
-                                </div>
+                                <details class="technical-details-disclosure mt-2">
+                                    <summary class="cursor-pointer text-xs font-semibold text-secondary flex-row align-center gap-2" style="user-select: none; outline: none; list-style: none;">
+                                        <i data-lucide="settings" style="width:12px;height:12px;color:var(--accent);"></i>
+                                        Advanced Technical Details
+                                    </summary>
+                                    <div class="mt-2 flex-col gap-2">
+                                        <p><strong>Definition:</strong> ${escapeHtml(metric.definition)}</p>
+                                        <div style="margin-top: 4px;">
+                                            <strong>Target Optimization:</strong>
+                                            <p class="text-xs text-secondary mt-1">Goal: <span class="accent-color" style="font-weight: 600;">${escapeHtml(metric.target)}</span></p>
+                                        </div>
+                                        <div style="margin-top: 4px;">
+                                            <strong>Mathematical Formula:</strong>
+                                            <div class="metric-math" id="math-formula-${key}" data-formula="${metric.formula}"></div>
+                                        </div>
+                                    </div>
+                                </details>
                             </div>
                         </div>
                     </div>
@@ -950,7 +973,7 @@ document.addEventListener("DOMContentLoaded", () => {
             el.valDateRange.textContent = `${stats.start_date} to ${stats.end_date}`;
             
             // Populate profile summary
-            el.valProfileText.textContent = `Standardized columns detected. Date span covers ${stats.days_span} days of history.`;
+            el.valProfileText.textContent = `Your data is clean and ready. Covers ${stats.days_span} days of sales history.`;
             el.datasetSummaryCard.classList.remove("hidden");
             
             // Refresh preview
@@ -965,6 +988,77 @@ document.addEventListener("DOMContentLoaded", () => {
             el.navForecast.classList.add("disabled");
             el.datasetSummaryCard.classList.add("hidden");
             el.datasetPreviewCard.classList.add("hidden");
+        }
+
+        // Chat only makes sense once there's real data to ground answers in — without
+        // this, opening the chat against an empty backend surfaced a vague LLM-synthesized
+        // error instead of a clear "load a dataset first" state.
+        if (el.openChatBtn) el.openChatBtn.disabled = !isLoaded;
+        if (!isLoaded && state.chatOpen) toggleChat(false);
+        if (el.clearDatasetBtn) el.clearDatasetBtn.classList.toggle("hidden", !isLoaded);
+    }
+
+    // Chart div IDs that may have a live Plotly instance at any point in the app's
+    // lifecycle — purged on reset so a new dataset never shows a stale chart until its
+    // own draw function happens to re-run.
+    const PLOTLY_CHART_IDS = [
+        "chart-sales-trend", "chart-correlation", "chart-weekly", "chart-monthly",
+        "chart-top-products", "chart-category", "chart-forecast"
+    ];
+
+    function generateSessionId() {
+        if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+        return "session_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+
+    // Chat session id is tied to the browser tab session (sessionStorage), so a plain
+    // page reload keeps ongoing chat continuity, but a genuinely new tab — or an explicit
+    // dataset reset via rotateChatSession() — starts a fresh conversation rather than
+    // reusing the hardcoded, globally-shared "local_demo_session" id every client used to.
+    const CHAT_SESSION_KEY = "insightforge_chat_session_id";
+    function getOrCreateChatSessionId() {
+        let id = sessionStorage.getItem(CHAT_SESSION_KEY);
+        if (!id) {
+            id = generateSessionId();
+            sessionStorage.setItem(CHAT_SESSION_KEY, id);
+        }
+        return id;
+    }
+    function rotateChatSession() {
+        const id = generateSessionId();
+        sessionStorage.setItem(CHAT_SESSION_KEY, id);
+        state.chatSessionId = id;
+    }
+
+    // Fully resets all client-side state derived from a dataset. Called before a new
+    // dataset is loaded (upload / demo-load) and on an explicit "Clear Dataset" action.
+    // Without this, switching datasets mid-session left the PREVIOUS dataset's EDA,
+    // trained-model report, forecast, and What-If scenario state sitting in memory until
+    // the user happened to revisit those pages and trigger a refetch.
+    function resetAllAppState() {
+        state.edaData = null;
+        state.trainedReport = null;
+        state.activeProduct = null;
+        state.activeModel = null;
+        state.forecastData = null;
+        state.baselineForecastData = null;
+        state.currentScenarioMetrics = null;
+        state.scenarios = [];
+        state.simulator.priceMultiplier = 1.0;
+        state.simulator.promoDays = [];
+        state.requestTokens.eda += 1;
+        state.requestTokens.forecast += 1;
+        rotateChatSession();
+
+        PLOTLY_CHART_IDS.forEach(id => {
+            if (document.getElementById(id) && window.Plotly) {
+                try { Plotly.purge(id); } catch (e) { /* never drawn — nothing to purge */ }
+            }
+        });
+
+        if (el.chatMessages) {
+            el.chatMessages.innerHTML = "";
+            appendMessage("Hello! I'm your Retail Business Advisor. Ask me about stock levels, sales performance, or what to do next.", "bot");
         }
     }
 
@@ -991,7 +1085,26 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // --- Data Hub Logic ---
-    
+
+    // Explicit mid-session reset: clears the active dataset, every trained model, and
+    // all client-side derived state, returning the app to a genuine "nothing loaded" state.
+    if (el.clearDatasetBtn) {
+        el.clearDatasetBtn.addEventListener("click", async () => {
+            el.clearDatasetBtn.disabled = true;
+            try {
+                await api.post("/api/dataset/clear");
+                resetAllAppState();
+                setDatasetLoadedState(false);
+                navigateToPage("data-hub");
+                showToast("Dataset and trained models cleared.", "success");
+            } catch (error) {
+                showToast(`Failed to clear dataset: ${error.message}`, "error");
+            } finally {
+                el.clearDatasetBtn.disabled = false;
+            }
+        });
+    }
+
     // Load Demo Dataset
     el.loadDemoBtn.addEventListener("click", async () => {
         el.demoLoadStatus.textContent = "Generating and loading simulated retail transactions...";
@@ -1002,7 +1115,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await api.post("/api/dataset/load-demo");
             el.demoLoadStatus.textContent = "Demo retail dataset loaded successfully!";
             el.demoLoadStatus.className = "mt-3 text-center text-sm success-color";
-            
+
+            resetAllAppState();
             setDatasetLoadedState(true, "synthetic_retail_data.csv", data.report.stats);
             showToast("Demo retail dataset loaded successfully!", "success");
             
@@ -1076,7 +1190,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await api.post("/api/dataset/upload", formData, true);
             el.selectedFileInfo.textContent = `Successfully uploaded: ${file.name}!`;
             el.selectedFileInfo.className = "file-info success-color";
-            
+
+            resetAllAppState();
             setDatasetLoadedState(true, file.name, data.report.stats);
             showToast("Dataset uploaded and validated successfully!", "success");
             
@@ -1105,7 +1220,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Headers
             let htmlHeaders = "<tr>";
             data.columns.forEach(col => {
-                htmlHeaders += `<th>${escapeHtml(col)}</th>`;
+                htmlHeaders += `<th title="${escapeHtml(col)}">${escapeHtml(getFriendlyColumnLabel(col))}</th>`;
             });
             htmlHeaders += "</tr>";
             el.previewTable.querySelector("thead").innerHTML = htmlHeaders;
@@ -1141,7 +1256,9 @@ document.addEventListener("DOMContentLoaded", () => {
         el.loaderCorrelation.classList.remove("hidden");
         el.loaderWeekly.classList.remove("hidden");
         el.loaderMonthly.classList.remove("hidden");
-        
+        el.loaderTopProducts.classList.remove("hidden");
+        el.loaderCategory.classList.remove("hidden");
+
         el.edaAvgPrice.classList.add("skeleton-pulse");
         el.edaAvgSold.classList.add("skeleton-pulse");
         el.edaOutliersCount.classList.add("skeleton-pulse");
@@ -1159,9 +1276,12 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // Draw Charts
             drawSalesTrendChart(eda.sales_trend);
-            drawCorrelationChart(eda.correlation_matrix);
+            // Correlation heatmap is drawn lazily the first time "View Detailed Analysis" is opened (see listener below) —
+            // it lives inside a <details> and Plotly can't size itself correctly inside a hidden container.
             drawSeasonalityChart("chart-weekly", eda.weekly_seasonality, "Weekly Seasonality Pattern", "Day of Week");
             drawSeasonalityChart("chart-monthly", eda.monthly_seasonality, "Monthly Seasonality Pattern", "Month");
+            drawTopProductsChart(eda.top_products);
+            drawCategoryPerformanceChart(eda.category_performance);
 
             // Calculate dynamic drivers from correlation matrix
             try {
@@ -1179,31 +1299,27 @@ document.addEventListener("DOMContentLoaded", () => {
                 let stockVal = (unitsSoldIdx !== -1 && stockIdx !== -1 && mat[unitsSoldIdx]) ? mat[unitsSoldIdx][stockIdx] : 0;
                 let weekendVal = (unitsSoldIdx !== -1 && weekendIdx !== -1 && mat[unitsSoldIdx]) ? mat[unitsSoldIdx][weekendIdx] : 0;
                 
-                let driverHtml = "<strong>What Happened:</strong> Analyzed historical demand correlations.<br><strong>Why (Calculated Drivers):</strong><br>";
                 let driversList = [];
                 if (Math.abs(promoVal) > 0.05) {
-                    driversList.push(`- 🚀 <strong>Promotions:</strong> Positive impact (+${Math.round(promoVal * 100)}% correlation) - campaigns spike volume.`);
+                    driversList.push(`<li>✓ <strong>Promotions</strong> — weekend and campaign promotions strongly increase sales.</li>`);
                 }
                 if (Math.abs(weekendVal) > 0.05) {
-                    driversList.push(`- 🗓️ <strong>Weekend shopping:</strong> Positive impact (+${Math.round(weekendVal * 100)}% correlation) - high weekend store footfall.`);
+                    driversList.push(`<li>✓ <strong>Weekend shopping</strong> — sales are consistently higher on weekends due to increased store footfall.</li>`);
                 }
                 if (Math.abs(priceVal) > 0.05) {
-                    driversList.push(`- 💸 <strong>Price Elasticity:</strong> Negative impact (${Math.round(priceVal * 100)}% correlation) - price hikes lower sales volume.`);
+                    driversList.push(`<li>✓ <strong>Pricing</strong> — raising prices tends to reduce how much customers buy.</li>`);
                 }
                 if (Math.abs(stockVal) > 0.05) {
-                    driversList.push(`- 📦 <strong>Stock availability:</strong> Positive correlation (+${Math.round(stockVal * 100)}%) - stockouts immediately cap revenue.`);
+                    driversList.push(`<li>✓ <strong>Stock availability</strong> — running low on stock directly caps how much you can sell.</li>`);
                 }
-                
-                if (driversList.length > 0) {
-                    driverHtml += driversList.join("<br>") + "<br>";
-                } else {
-                    driverHtml += "No strong statistical sales drivers detected in this dataset yet.<br>";
-                }
-                driverHtml += "<strong>Recommended Action:</strong> Run targeted campaigns on Wednesdays/Thursdays to align with high-impact weekend shopping patterns.";
-                document.getElementById("ai-obs-correlation-text").innerHTML = driverHtml;
+
+                const driverListHtml = driversList.length > 0
+                    ? driversList.join("")
+                    : "<li>No strong sales drivers detected yet — upload more history for deeper insight.</li>";
+                document.getElementById("ai-obs-correlation-text").innerHTML = driverListHtml;
             } catch (err) {
                 console.error("Failed to parse key drivers from correlation matrix:", err);
-                document.getElementById("ai-obs-correlation-text").innerHTML = "<strong>Observation:</strong> Sales drivers could not be evaluated due to lack of variable history.";
+                document.getElementById("ai-obs-correlation-text").innerHTML = "<li>Sales drivers could not be evaluated due to lack of variable history.</li>";
             }
             
             // Hide chart spinners and remove skeleton load states on success
@@ -1211,7 +1327,9 @@ document.addEventListener("DOMContentLoaded", () => {
             el.loaderCorrelation.classList.add("hidden");
             el.loaderWeekly.classList.add("hidden");
             el.loaderMonthly.classList.add("hidden");
-            
+            el.loaderTopProducts.classList.add("hidden");
+            el.loaderCategory.classList.add("hidden");
+
             el.edaAvgPrice.classList.remove("skeleton-pulse");
             el.edaAvgSold.classList.remove("skeleton-pulse");
             el.edaOutliersCount.classList.remove("skeleton-pulse");
@@ -1226,7 +1344,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             <td>${escapeHtml(out.product_id)}</td>
                             <td>${escapeHtml(out.product_name)}</td>
                             <td><strong>${escapeHtml(out.units_sold)}</strong></td>
-                            <td>Outside [${escapeHtml(out.lower_bound)}, ${escapeHtml(out.upper_bound)}]</td>
+                            <td>Above normal range (usually ${escapeHtml(out.lower_bound)}–${escapeHtml(out.upper_bound)} units)</td>
                         </tr>
                     `;
                 });
@@ -1242,11 +1360,13 @@ document.addEventListener("DOMContentLoaded", () => {
             el.loaderCorrelation.classList.add("hidden");
             el.loaderWeekly.classList.add("hidden");
             el.loaderMonthly.classList.add("hidden");
-            
+            el.loaderTopProducts.classList.add("hidden");
+            el.loaderCategory.classList.add("hidden");
+
             el.edaAvgPrice.classList.remove("skeleton-pulse");
             el.edaAvgSold.classList.remove("skeleton-pulse");
             el.edaOutliersCount.classList.remove("skeleton-pulse");
-            showToast("Failed to load descriptive EDA dashboard.", "error");
+            showToast("Couldn't load your sales insights. Please try again.", "error");
         }
     }
 
@@ -1279,8 +1399,8 @@ document.addEventListener("DOMContentLoaded", () => {
     function drawCorrelationChart(matrix) {
         const trace = {
             z: matrix.matrix,
-            x: matrix.columns,
-            y: matrix.columns,
+            x: matrix.columns.map(getFriendlyColumnLabel),
+            y: matrix.columns.map(getFriendlyColumnLabel),
             type: 'heatmap',
             colorscale: [
                 [0, '#f43f5e'],   // Negative correlation (rose)
@@ -1299,6 +1419,17 @@ document.addEventListener("DOMContentLoaded", () => {
         };
         Plotly.purge('chart-correlation');
         Plotly.newPlot('chart-correlation', [trace], layout, { responsive: true, displayModeBar: false });
+    }
+
+    // Lazily draw the correlation heatmap the first (and every) time "View Detailed Analysis" opens —
+    // Plotly can't size a chart correctly inside a closed <details> container.
+    const correlationDetailsEl = document.getElementById("correlation-details");
+    if (correlationDetailsEl) {
+        correlationDetailsEl.addEventListener("toggle", () => {
+            if (correlationDetailsEl.open && state.edaData && state.edaData.correlation_matrix) {
+                drawCorrelationChart(state.edaData.correlation_matrix);
+            }
+        });
     }
 
     // Draw bar chart for seasonality
@@ -1322,6 +1453,65 @@ document.addEventListener("DOMContentLoaded", () => {
         Plotly.newPlot(elementId, [trace], layout, { responsive: true, displayModeBar: false });
     }
 
+    // Shared layout for the two horizontal ranking bar charts below. Both charts rank items by
+    // a single measure (total units sold) rather than comparing distinct series, so per data-viz
+    // best practice they use one consistent hue per chart (magnitude job), not a rainbow of colors
+    // per bar — a different color per bar would spend the identity channel re-encoding what the
+    // bar length already shows, and buys nothing since there's no second series to tell apart.
+    function horizontalRankingLayout() {
+        return {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            margin: { t: 10, r: 60, b: 35, l: 130 },
+            font: { color: '#94a3b8', family: 'Outfit, Inter, sans-serif', size: 11 },
+            xaxis: { gridcolor: 'rgba(255,255,255,0.04)', linecolor: 'rgba(255,255,255,0.06)' },
+            yaxis: { autorange: 'reversed', gridcolor: 'rgba(255,255,255,0.02)', linecolor: 'rgba(255,255,255,0.06)' },
+            bargap: 0.35
+        };
+    }
+
+    // Draw Top Selling Products as a horizontal ranking bar (highest at top, value labeled at the tip).
+    // Both charts here sort descending and rely on yaxis.autorange:'reversed' (shared layout) to put
+    // the first (largest) array entry at the top — the same convention, applied consistently.
+    function drawTopProductsChart(topProducts) {
+        const products = (topProducts || []).slice().sort((a, b) => b.total_sales - a.total_sales);
+        const trace = {
+            x: products.map(p => p.total_sales),
+            y: products.map(p => p.product_name),
+            type: 'bar',
+            orientation: 'h',
+            marker: { color: '#6366f1', opacity: 0.85 },
+            text: products.map(p => p.total_sales.toLocaleString()),
+            textposition: 'outside',
+            textfont: { color: '#e2e8f0' },
+            hovertemplate: '%{y}<br>%{x:,} units sold<extra></extra>'
+        };
+        const layout = horizontalRankingLayout();
+        Plotly.purge('chart-top-products');
+        Plotly.newPlot('chart-top-products', [trace], layout, { responsive: true, displayModeBar: false });
+    }
+
+    // Draw Category Performance as a horizontal ranking bar (highest at top, value labeled at the tip)
+    function drawCategoryPerformanceChart(categoryPerformance) {
+        const categories = (categoryPerformance || [])
+            .slice()
+            .sort((a, b) => b.total_sales - a.total_sales); // descending — largest first, matches Top Products
+        const trace = {
+            x: categories.map(c => c.total_sales),
+            y: categories.map(c => c.category),
+            type: 'bar',
+            orientation: 'h',
+            marker: { color: '#38bdf8', opacity: 0.85 },
+            text: categories.map(c => c.total_sales.toLocaleString()),
+            textposition: 'outside',
+            textfont: { color: '#e2e8f0' },
+            hovertemplate: '%{y}<br>%{x:,} units sold<extra></extra>'
+        };
+        const layout = horizontalRankingLayout();
+        Plotly.purge('chart-category');
+        Plotly.newPlot('chart-category', [trace], layout, { responsive: true, displayModeBar: false });
+    }
+
     // --- Forecasting Page Logic ---
     async function loadForecastingPage() {
         try {
@@ -1337,6 +1527,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 el.forecastEmptyState.classList.remove("hidden");
                 el.forecastSummaryContainer.classList.add("hidden");
                 el.forecastWorkspace.classList.add("hidden");
+                if (el.forecastWorkspaceLabel) el.forecastWorkspaceLabel.classList.add("hidden");
                 el.scenarioHistoryCard.classList.add("hidden");
                 
                 // Keep UI locked if training is active in background
@@ -1367,11 +1558,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 progress = Math.min(progress, 90);
                 el.trainingProgressFill.style.width = `${progress}%`;
                 if (progress > 60) {
-                    el.trainingProgressText.textContent = "Aggregating metrics and picking recommendations...";
+                    el.trainingProgressText.textContent = "Selecting the best forecasting engine for each product...";
                 } else if (progress > 30) {
-                    el.trainingProgressText.textContent = "Fitting Prophet models and holiday adjustments...";
+                    el.trainingProgressText.textContent = "Learning seasonal and holiday demand patterns...";
                 } else {
-                    el.trainingProgressText.textContent = "Extracting lags, rolling averages, and split datasets...";
+                    el.trainingProgressText.textContent = "Preparing your sales history for analysis...";
                 }
             }
         }, 300);
@@ -1429,6 +1620,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         el.forecastWorkspace.classList.remove("hidden");
+        if (el.forecastWorkspaceLabel) el.forecastWorkspaceLabel.classList.remove("hidden");
     }
 
     // Trigger workspace update on product select
@@ -1556,7 +1748,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // Update chart titles
             el.forecastChartTitle.textContent = `${data.product_name} Demand Forecast`;
-            el.forecastChartSubtitle.textContent = `Model: ${data.model_used} | Horizon: ${data.forecast_horizon_days} Days`;
+            el.forecastChartSubtitle.textContent = `${getModelFriendlyLabel(data.model_used)} · ${data.forecast_horizon_days}-Day Horizon`;
             
             // Update recommendation reason text if it was the recommended model
             if (data.recommendation_reason) {
@@ -1632,13 +1824,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Update the Executive Summary Board elements
                 el.forecastSummaryContainer.classList.remove("hidden");
                 
-                // A. AI Action Plan Alert Text
-                if (ds.reorder_date) {
-                    document.getElementById("exec-action-text").innerHTML = `AI recommends ordering <strong class="accent-color" style="color: var(--accent); font-weight: 700;">${ds.recommended_reorder_qty} units</strong> of ${data.product_name} on <strong style="color: var(--text-primary); font-weight: 700;">${ds.reorder_date}</strong> to prevent projected stockouts.`;
-                } else {
-                    document.getElementById("exec-action-text").innerHTML = `Inventory status is stable for ${data.product_name}. No immediate restocking required.`;
-                }
-
                 // B. Demand Outlook calculation
                 const firstPred = simPredictions[0];
                 const lastPred = simPredictions[simPredictions.length - 1];
@@ -1670,7 +1855,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (modelData && modelData.MAPE) mape = modelData.MAPE;
                 }
                 const accuracyPct = `${(100 - mape).toFixed(1)}%`;
-                document.getElementById("exec-prediction-accuracy").textContent = accuracyPct;
+                const accuracyRating = METRICS_EXPLAINER.MAPE.ratingFn(mape);
+                document.getElementById("exec-prediction-accuracy").textContent = accuracyRating.text.split(" (")[0];
+                const accuracyDetailEl = document.getElementById("exec-prediction-accuracy-detail");
+                if (accuracyDetailEl) {
+                    accuracyDetailEl.textContent = `${accuracyPct} accuracy`;
+                    accuracyDetailEl.className = `rating-badge ${accuracyRating.class} mt-1`;
+                }
 
                 // G. Forecast Reliability (R2 derived)
                 let r2 = (data.metrics && data.metrics.R2) ? data.metrics.R2 : 0;
@@ -1686,11 +1877,35 @@ document.addEventListener("DOMContentLoaded", () => {
                 else reliabilityText = "⭐☆☆☆☆ Low";
                 document.getElementById("exec-forecast-reliability").textContent = reliabilityText;
 
+                // Today's Recommendation checklist (Tier 1) — plain-language summary of everything above
+                const statusLineMap = {
+                    OUT_OF_STOCK: "❌ Inventory is out of stock",
+                    CRITICAL_LOW: "⚠️ Inventory is critically low",
+                    LOW_STOCK: "⚠️ Inventory is running low",
+                    HEALTHY: "✅ Inventory looks healthy"
+                };
+                let recOutlookLine = "➡️ Demand expected to stay stable";
+                if (changePct >= 5) recOutlookLine = `📈 Demand expected to rise (+${changePct.toFixed(0)}%)`;
+                else if (changePct <= -5) recOutlookLine = `📉 Demand expected to decline (${changePct.toFixed(0)}%)`;
+                const recRevenueLine = `💰 Revenue forecast ₹${simRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                const recRiskLine = ds.revenue_at_risk > 0
+                    ? `⚠️ Potential revenue loss ₹${ds.revenue_at_risk.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} if stock runs out`
+                    : `✅ No revenue at risk`;
+                const recActionLine = ds.reorder_date
+                    ? `👉 Order <strong>${ds.recommended_reorder_qty} units</strong> before <strong>${ds.reorder_date}</strong>`
+                    : `👉 No reorder needed — stock is on track for the next ${data.forecast_horizon_days} days`;
+                const recListEl = document.getElementById("todays-recommendation-list");
+                if (recListEl) {
+                    recListEl.innerHTML = [
+                        statusLineMap[ds.status] || statusLineMap.HEALTHY, recOutlookLine, recRevenueLine, recRiskLine, recActionLine
+                    ].map(line => `<li>${line}</li>`).join("");
+                }
+
                 // Bind Acknowledge button
                 const ackBtn = document.getElementById("exec-action-ack-btn");
                 if (ackBtn) {
                     ackBtn.onclick = () => {
-                        showToast("AI Action Plan acknowledged. Replenishment tasks logged.", "success");
+                        showToast("Recommendation acknowledged. Replenishment tasks logged.", "success");
                     };
                 }
                 // Remove skeleton loader states
@@ -1908,7 +2123,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     message: messageText,
-                    session_id: "local_demo_session"
+                    session_id: state.chatSessionId
                 })
             });
             
@@ -1918,7 +2133,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const data = await response.json();
                 appendMessage(data.response, "bot");
             } else {
-                appendMessage("I apologize, but I encountered an error retrieving data from the forecasting registry. Please make sure the models have been successfully trained first.", "bot");
+                appendMessage("I couldn't retrieve that information right now. Please make sure your forecasting models have been trained, then try again.", "bot");
             }
         } catch (error) {
             removeTypingIndicator(loadingId);
@@ -1961,7 +2176,7 @@ document.addEventListener("DOMContentLoaded", () => {
         loaderDiv.innerHTML = `
             <div class="message-avatar"><i data-lucide="bot"></i></div>
             <div class="message-content">
-                <p class="text-secondary">AI Analyst is auditing metrics...</p>
+                <p class="text-secondary">Retail Business Advisor is thinking...</p>
             </div>
         `;
         el.chatMessages.appendChild(loaderDiv);
@@ -1986,11 +2201,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (lower.includes("forecast") || lower.includes("explain")) {
             if (state.trainedReport) {
-                return "The forecast chart shows a strong weekend sales spike (Fridays/Saturdays) for our dairy category. Prophet model was selected as the recommended model due to its low error rate (MAPE < 6%). No stockouts are predicted for the next 14 days if stock is maintained.";
+                return "The forecast shows a strong weekend sales spike for our dairy category. Our AI selected the best-performing forecasting engine for this product, with excellent accuracy. No stockouts are predicted for the next 14 days if stock is maintained.";
             }
             return "Please load data and run 'Train Forecasting Models' first so I can analyze the metrics.";
         }
-        return "I am connected. Once the AI Agent router is activated in Module 6, I will query the models and dataset to explain any specific questions you ask!";
+        return "I'm here to help — ask me about top sellers, low stock, or what to do next, and I'll pull the answer from your current data.";
     }
 
     // Learning Center Panel triggers
@@ -2002,6 +2217,24 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el.closeLearningBtn) {
         el.closeLearningBtn.addEventListener("click", () => {
             toggleLearningCenter(false);
+        });
+    }
+
+    // Learning Center tab switch triggers (Insights <-> Glossary)
+    if (el.learningInsightsTab) {
+        el.learningInsightsTab.addEventListener("click", () => {
+            state.learning.activeTab = "insights";
+            el.learningInsightsTab.classList.add("active");
+            el.learningGlossaryTab.classList.remove("active");
+            updateLearningCenter();
+        });
+    }
+    if (el.learningGlossaryTab) {
+        el.learningGlossaryTab.addEventListener("click", () => {
+            state.learning.activeTab = "glossary";
+            el.learningGlossaryTab.classList.add("active");
+            el.learningInsightsTab.classList.remove("active");
+            updateLearningCenter();
         });
     }
 
@@ -2374,14 +2607,24 @@ document.addEventListener("DOMContentLoaded", () => {
         const recommendedPrefix = isRecommended ? "★ " : "";
         if (modelName === "Prophet") {
             return recommendedPrefix + "Forecast Engine (Facebook Prophet)";
-        } else if (modelName === "Random Forest") {
-            return recommendedPrefix + "Tree Ensemble Engine (Random Forest)";
-        } else if (modelName === "Ridge") {
+        } else if (modelName === "Gradient Boosting") {
+            return recommendedPrefix + "Boosted Tree Engine (Gradient Boosting)";
+        } else if (modelName === "Ridge Regression") {
             return recommendedPrefix + "Regularized Trend Engine (Ridge)";
-        } else if (modelName === "LinearRegression") {
-            return recommendedPrefix + "Simple Baseline Engine (Linear Regression)";
         }
         return recommendedPrefix + modelName;
+    }
+
+    // Map raw backend column names to business-friendly labels (raw name kept as a tooltip)
+    const FRIENDLY_COLUMN_LABELS = {
+        date: "Date", store_id: "Store", product_id: "Product ID", product_name: "Product",
+        category: "Category", units_sold: "Units Sold", price: "Price",
+        stock_on_hand: "Stock on Hand", promotion_flag: "Promotion Active",
+        day_of_week: "Day of Week", is_weekend: "Weekend Day", month: "Month",
+        day_of_year: "Day of Year"
+    };
+    function getFriendlyColumnLabel(col) {
+        return FRIENDLY_COLUMN_LABELS[col] || col;
     }
 
     // Debounce function to limit request frequencies
@@ -2393,6 +2636,24 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     }
 
-    // Run startup status check
-    checkDatasetStatus();
+    // Run startup status check. First, if this is a genuinely new browser tab session
+    // (new tab, or the browser was closed and reopened — sessionStorage is cleared in
+    // both cases, unlike localStorage), treat that as "opening the app" and clear any
+    // dataset/models left active from a previous session before reflecting status. A
+    // plain in-tab reload does NOT clear sessionStorage, so normal work-in-progress is
+    // never wiped by refreshing the page or by a backend --reload restart.
+    const SESSION_FLAG_KEY = "insightforge_session_active";
+    state.chatSessionId = getOrCreateChatSessionId();
+    (async () => {
+        if (!sessionStorage.getItem(SESSION_FLAG_KEY)) {
+            try {
+                await api.post("/api/dataset/clear");
+            } catch (error) {
+                // Backend not reachable yet — checkDatasetStatus() below will surface
+                // the offline state normally; don't block startup on this.
+            }
+            sessionStorage.setItem(SESSION_FLAG_KEY, "1");
+        }
+        checkDatasetStatus();
+    })();
 });

@@ -1,166 +1,28 @@
 {
-    "PRD_02": {
-        "Random Forest": {
-            "model_name": "Random Forest",
-            "product_id": "PRD_02",
-            "metrics": {
-                "MAE": 7.33,
-                "RMSE": 8.93,
-                "MAPE": 8.26,
-                "R2": 0.83
-            },
-            "model_path": "PRD_02_random_forest.pkl",
-            "trained_at": "2026-07-14 00:13:30"
-        },
-        "Prophet": {
-            "model_name": "Prophet",
-            "product_id": "PRD_02",
-            "metrics": {
-                "MAE": 6.26,
-                "RMSE": 8.47,
-                "MAPE": 7.32,
-                "R2": 0.85
-            },
-            "model_path": "PRD_02_prophet.pkl",
-            "trained_at": "2026-07-14 00:13:31"
-        },
-        "Linear Regression": {
-            "model_name": "Linear Regression",
-            "product_id": "PRD_02",
-            "metrics": {
-                "MAE": 15.74,
-                "RMSE": 18.52,
-                "MAPE": 16.51,
-                "R2": 0.26
-            },
-            "model_path": "PRD_02_linear_regression.pkl",
-            "trained_at": "2026-07-14 00:13:28"
-        },
-        "Ridge Regression": {
-            "model_name": "Ridge Regression",
-            "product_id": "PRD_02",
-            "metrics": {
-                "MAE": 15.74,
-                "RMSE": 18.51,
-                "MAPE": 16.49,
-                "R2": 0.26
-            },
-            "model_path": "PRD_02_ridge_regression.pkl",
-            "trained_at": "2026-07-14 00:13:28"
-        }
-    },
-    "PRD_03": {
-        "Random Forest": {
-            "model_name": "Random Forest",
-            "product_id": "PRD_03",
-            "metrics": {
-                "MAE": 7.84,
-                "RMSE": 9.73,
-                "MAPE": 9.7,
-                "R2": 0.75
-            },
-            "model_path": "PRD_03_random_forest.pkl",
-            "trained_at": "2026-07-14 00:13:30"
-        },
-        "Prophet": {
-            "model_name": "Prophet",
-            "product_id": "PRD_03",
-            "metrics": {
-                "MAE": 3.79,
-                "RMSE": 4.86,
-                "MAPE": 5.26,
-                "R2": 0.94
-            },
-            "model_path": "PRD_03_prophet.pkl",
-            "trained_at": "2026-07-14 00:13:31"
-        },
-        "Linear Regression": {
-            "model_name": "Linear Regression",
-            "product_id": "PRD_03",
-            "metrics": {
-                "MAE": 13.57,
-                "RMSE": 15.67,
-                "MAPE": 16.59,
-                "R2": 0.35
-            },
-            "model_path": "PRD_03_linear_regression.pkl",
-            "trained_at": "2026-07-14 00:13:28"
-        },
-        "Ridge Regression": {
-            "model_name": "Ridge Regression",
-            "product_id": "PRD_03",
-            "metrics": {
-                "MAE": 14.04,
-                "RMSE": 16.67,
-                "MAPE": 16.64,
-                "R2": 0.26
-            },
-            "model_path": "PRD_03_ridge_regression.pkl",
-            "trained_at": "2026-07-14 00:13:28"
-        }
-    },
-    "PRD_04": {
-        "Random Forest": {
-            "model_name": "Random Forest",
-            "product_id": "PRD_04",
-            "metrics": {
-                "MAE": 4.5,
-                "RMSE": 5.6,
-                "MAPE": 6.63,
-                "R2": 0.87
-            },
-            "model_path": "PRD_04_random_forest.pkl",
-            "trained_at": "2026-07-14 00:13:30"
-        },
-        "Prophet": {
-            "model_name": "Prophet",
-            "product_id": "PRD_04",
-            "metrics": {
-                "MAE": 4.92,
-                "RMSE": 5.94,
-                "MAPE": 7.84,
-                "R2": 0.85
-            },
-            "model_path": "PRD_04_prophet.pkl",
-            "trained_at": "2026-07-14 00:13:31"
-        },
-        "Linear Regression": {
-            "model_name": "Linear Regression",
-            "product_id": "PRD_04",
-            "metrics": {
-                "MAE": 7.28,
-                "RMSE": 8.78,
-                "MAPE": 12.69,
-                "R2": 0.68
-            },
-            "model_path": "PRD_04_linear_regression.pkl",
-            "trained_at": "2026-07-14 00:13:28"
-        },
-        "Ridge Regression": {
-            "model_name": "Ridge Regression",
-            "product_id": "PRD_04",
-            "metrics": {
-                "MAE": 7.3,
-                "RMSE": 8.79,
-                "MAPE": 12.71,
-                "R2": 0.68
-            },
-            "model_path": "PRD_04_ridge_regression.pkl",
-            "trained_at": "2026-07-14 00:13:28"
-        }
-    },
     "PRD_01": {
-        "Random Forest": {
-            "model_name": "Random Forest",
+        "Ridge Regression": {
+            "model_name": "Ridge Regression",
             "product_id": "PRD_01",
             "metrics": {
-                "MAE": 8.48,
-                "RMSE": 10.79,
-                "MAPE": 6.36,
-                "R2": 0.88
+                "MAE": 30.04,
+                "RMSE": 33.85,
+                "MAPE": 22.19,
+                "R2": -0.19
             },
-            "model_path": "PRD_01_random_forest.pkl",
-            "trained_at": "2026-07-14 00:13:31"
+            "model_path": "PRD_01_ridge_regression.pkl",
+            "trained_at": "2026-07-16 01:19:18"
+        },
+        "Gradient Boosting": {
+            "model_name": "Gradient Boosting",
+            "product_id": "PRD_01",
+            "metrics": {
+                "MAE": 10.61,
+                "RMSE": 13.01,
+                "MAPE": 7.79,
+                "R2": 0.82
+            },
+            "model_path": "PRD_01_gradient_boosting.pkl",
+            "trained_at": "2026-07-16 01:19:18"
         },
         "Prophet": {
             "model_name": "Prophet",
@@ -172,46 +34,124 @@
                 "R2": 0.92
             },
             "model_path": "PRD_01_prophet.pkl",
-            "trained_at": "2026-07-14 00:13:31"
-        },
-        "Linear Regression": {
-            "model_name": "Linear Regression",
-            "product_id": "PRD_01",
-            "metrics": {
-                "MAE": 29.93,
-                "RMSE": 33.78,
-                "MAPE": 22.1,
-                "R2": -0.18
-            },
-            "model_path": "PRD_01_linear_regression.pkl",
-            "trained_at": "2026-07-14 00:13:28"
-        },
+            "trained_at": "2026-07-16 01:19:18"
+        }
+    },
+    "PRD_02": {
         "Ridge Regression": {
             "model_name": "Ridge Regression",
-            "product_id": "PRD_01",
+            "product_id": "PRD_02",
             "metrics": {
-                "MAE": 30.04,
-                "RMSE": 33.85,
-                "MAPE": 22.19,
-                "R2": -0.19
+                "MAE": 15.74,
+                "RMSE": 18.51,
+                "MAPE": 16.49,
+                "R2": 0.26
             },
-            "model_path": "PRD_01_ridge_regression.pkl",
-            "trained_at": "2026-07-14 00:13:28"
+            "model_path": "PRD_02_ridge_regression.pkl",
+            "trained_at": "2026-07-16 01:19:18"
+        },
+        "Gradient Boosting": {
+            "model_name": "Gradient Boosting",
+            "product_id": "PRD_02",
+            "metrics": {
+                "MAE": 7.29,
+                "RMSE": 8.93,
+                "MAPE": 8.46,
+                "R2": 0.83
+            },
+            "model_path": "PRD_02_gradient_boosting.pkl",
+            "trained_at": "2026-07-16 01:19:18"
+        },
+        "Prophet": {
+            "model_name": "Prophet",
+            "product_id": "PRD_02",
+            "metrics": {
+                "MAE": 6.26,
+                "RMSE": 8.47,
+                "MAPE": 7.32,
+                "R2": 0.85
+            },
+            "model_path": "PRD_02_prophet.pkl",
+            "trained_at": "2026-07-16 01:19:18"
+        }
+    },
+    "PRD_03": {
+        "Ridge Regression": {
+            "model_name": "Ridge Regression",
+            "product_id": "PRD_03",
+            "metrics": {
+                "MAE": 14.04,
+                "RMSE": 16.67,
+                "MAPE": 16.64,
+                "R2": 0.26
+            },
+            "model_path": "PRD_03_ridge_regression.pkl",
+            "trained_at": "2026-07-16 01:19:18"
+        },
+        "Gradient Boosting": {
+            "model_name": "Gradient Boosting",
+            "product_id": "PRD_03",
+            "metrics": {
+                "MAE": 9.3,
+                "RMSE": 12.5,
+                "MAPE": 11.35,
+                "R2": 0.59
+            },
+            "model_path": "PRD_03_gradient_boosting.pkl",
+            "trained_at": "2026-07-16 01:19:18"
+        },
+        "Prophet": {
+            "model_name": "Prophet",
+            "product_id": "PRD_03",
+            "metrics": {
+                "MAE": 3.79,
+                "RMSE": 4.86,
+                "MAPE": 5.26,
+                "R2": 0.94
+            },
+            "model_path": "PRD_03_prophet.pkl",
+            "trained_at": "2026-07-16 01:19:18"
+        }
+    },
+    "PRD_04": {
+        "Ridge Regression": {
+            "model_name": "Ridge Regression",
+            "product_id": "PRD_04",
+            "metrics": {
+                "MAE": 7.3,
+                "RMSE": 8.79,
+                "MAPE": 12.71,
+                "R2": 0.68
+            },
+            "model_path": "PRD_04_ridge_regression.pkl",
+            "trained_at": "2026-07-16 01:19:18"
+        },
+        "Gradient Boosting": {
+            "model_name": "Gradient Boosting",
+            "product_id": "PRD_04",
+            "metrics": {
+                "MAE": 3.43,
+                "RMSE": 4.1,
+                "MAPE": 5.65,
+                "R2": 0.93
+            },
+            "model_path": "PRD_04_gradient_boosting.pkl",
+            "trained_at": "2026-07-16 01:19:18"
+        },
+        "Prophet": {
+            "model_name": "Prophet",
+            "product_id": "PRD_04",
+            "metrics": {
+                "MAE": 4.92,
+                "RMSE": 5.94,
+                "MAPE": 7.84,
+                "R2": 0.85
+            },
+            "model_path": "PRD_04_prophet.pkl",
+            "trained_at": "2026-07-16 01:19:18"
         }
     },
     "PRD_05": {
-        "Linear Regression": {
-            "model_name": "Linear Regression",
-            "product_id": "PRD_05",
-            "metrics": {
-                "MAE": 2.26,
-                "RMSE": 2.69,
-                "MAPE": 14.93,
-                "R2": 0.73
-            },
-            "model_path": "PRD_05_linear_regression.pkl",
-            "trained_at": "2026-07-14 00:13:31"
-        },
         "Ridge Regression": {
             "model_name": "Ridge Regression",
             "product_id": "PRD_05",
@@ -222,19 +162,19 @@
                 "R2": 0.72
             },
             "model_path": "PRD_05_ridge_regression.pkl",
-            "trained_at": "2026-07-14 00:13:31"
+            "trained_at": "2026-07-16 01:19:18"
         },
-        "Random Forest": {
-            "model_name": "Random Forest",
+        "Gradient Boosting": {
+            "model_name": "Gradient Boosting",
             "product_id": "PRD_05",
             "metrics": {
-                "MAE": 1.88,
-                "RMSE": 2.18,
-                "MAPE": 10.7,
-                "R2": 0.82
+                "MAE": 2.64,
+                "RMSE": 3.75,
+                "MAPE": 13.03,
+                "R2": 0.48
             },
-            "model_path": "PRD_05_random_forest.pkl",
-            "trained_at": "2026-07-14 00:13:32"
+            "model_path": "PRD_05_gradient_boosting.pkl",
+            "trained_at": "2026-07-16 01:19:18"
         },
         "Prophet": {
             "model_name": "Prophet",
@@ -246,7 +186,7 @@
                 "R2": 0.92
             },
             "model_path": "PRD_05_prophet.pkl",
-            "trained_at": "2026-07-14 00:13:33"
+            "trained_at": "2026-07-16 01:19:18"
         }
     }
 }

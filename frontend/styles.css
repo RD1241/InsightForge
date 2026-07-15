@@ -16,6 +16,7 @@
     
     --accent: #6366f1;        /* Indigo accent */
     --accent-hover: #4f46e5;
+    --accent-light: #818cf8;  /* Lighter indigo tint for subtle borders/tags */
     --accent-glow: rgba(99, 102, 241, 0.15);
     
     --success: #10b981;       /* Emerald success */
@@ -1390,6 +1391,20 @@ a {
     font-weight: 600;
     color: var(--text-primary);
 }
+
+/* Tier labels — make the executive-decision -> evidence -> technical-detail hierarchy explicit */
+.tier-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    margin: 0 0 0.6rem 0.15rem;
+}
+.tier-label i { color: var(--accent); }
 
 /* Metric rating badge styling */
 .rating-badge {

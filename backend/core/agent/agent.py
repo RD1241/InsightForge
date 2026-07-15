@@ -20,8 +20,14 @@ def get_product_lookup_str() -> str:
         
     try:
         df_clean = get_clean_df()
-        unique_prods = df_clean[['product_id', 'product_name', 'category']].drop_duplicates()
-        
+        # Dedupe on product_id alone (keeping the first name/category seen for that ID).
+        # Some datasets have inconsistent category values for the same product_id across
+        # different rows (e.g. category recorded per-transaction instead of per-product);
+        # deduping on all three columns then produces one lookup line per (id, name, category)
+        # combination instead of one per product — with enough products this bloats the
+        # classifier's prompt to the point where the LLM stops routing to tools correctly.
+        unique_prods = df_clean[['product_id', 'product_name', 'category']].drop_duplicates(subset=['product_id'])
+
         lookup_lines = []
         for _, row in unique_prods.iterrows():
             lookup_lines.append(f"- ID: '{row['product_id']}' | Name: '{row['product_name']}' | Category: '{row['category']}'")

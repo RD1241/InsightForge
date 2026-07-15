@@ -23,7 +23,7 @@ def run_tests():
     print(f"Loaded dataset: {csv_path} (Shape: {df_raw.shape})")
     
     # 2. Run Training Pipeline
-    print("\nStep 1: Running Model Training Pipeline (Linear Regression, Random Forest, Prophet)...")
+    print("\nStep 1: Running Model Training Pipeline (Ridge Regression, Gradient Boosting, Prophet)...")
     report = run_training_pipeline(df_raw)
     
     print("\nTraining Run Report Summary:")

@@ -8,7 +8,7 @@ backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(backend_dir)
 
 from core.forecasting.preprocessor import clean_dataset, aggregate_to_product_level, build_features
-from core.forecasting.models import LinearRegressionModel, RandomForestModel, RidgeRegressionModel, evaluate_predictions
+from core.forecasting.models import GradientBoostingModel, RidgeRegressionModel, evaluate_predictions
 
 def smooth_outliers(df_product: pd.DataFrame, window: int = 14, threshold: float = 3.0) -> pd.DataFrame:
     """
@@ -106,13 +106,13 @@ def run_benchmark():
         prod_smooth = df_feat_smoothed[df_feat_smoothed['product_id'] == pid].copy()
         train_smooth = prod_smooth.iloc[:-30].copy()
         
-        # Evaluate Random Forest
-        rf_raw = RandomForestModel()
+        # Evaluate Gradient Boosting
+        rf_raw = GradientBoostingModel()
         rf_raw.fit(train_raw)
         rf_raw_preds = recursive_evaluate(rf_raw, train_raw, test_raw)
         rf_raw_metrics = evaluate_predictions(y_test, rf_raw_preds)
         
-        rf_smooth = RandomForestModel()
+        rf_smooth = GradientBoostingModel()
         rf_smooth.fit(train_smooth)
         rf_smooth_preds = recursive_evaluate(rf_smooth, train_smooth, test_raw) # Evaluate on actual y_test
         rf_smooth_metrics = evaluate_predictions(y_test, rf_smooth_preds)
@@ -146,21 +146,21 @@ def run_benchmark():
     ridge_smooth_avg = df_results["Ridge_smooth_MAE"].mean()
     
     print("\n--- Summary Averages ---")
-    print(f"Random Forest (Raw):             {rf_raw_avg:.2f} MAE")
-    print(f"Random Forest (MAD Smoothed):    {rf_smooth_avg:.2f} MAE")
+    print(f"Gradient Boosting (Raw):             {rf_raw_avg:.2f} MAE")
+    print(f"Gradient Boosting (MAD Smoothed):    {rf_smooth_avg:.2f} MAE")
     print(f"Ridge Regression (Raw):          {ridge_raw_avg:.2f} MAE")
     print(f"Ridge Regression (MAD Smoothed): {ridge_smooth_avg:.2f} MAE")
     
     rf_change = ((rf_smooth_avg - rf_raw_avg) / rf_raw_avg) * 100
     ridge_change = ((ridge_smooth_avg - ridge_raw_avg) / ridge_raw_avg) * 100
     
-    print(f"\nRandom Forest MAE Change:        {rf_change:+.2f}%")
+    print(f"\nGradient Boosting MAE Change:        {rf_change:+.2f}%")
     print(f"Ridge Regression MAE Change:     {ridge_change:+.2f}%")
     
     if rf_smooth_avg <= rf_raw_avg:
-        print("\nConclusion: Outlier smoothing IMPROVED accuracy (reduced average MAE) for Random Forest.")
+        print("\nConclusion: Outlier smoothing IMPROVED accuracy (reduced average MAE) for Gradient Boosting.")
     else:
-        print("\nConclusion: Outlier smoothing DEGRADED accuracy (increased average MAE) for Random Forest.")
+        print("\nConclusion: Outlier smoothing DEGRADED accuracy (increased average MAE) for Gradient Boosting.")
 
 if __name__ == "__main__":
     run_benchmark()
