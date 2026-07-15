@@ -75,12 +75,16 @@ def resolve_product_id(input_str: str) -> str:
         
     return input_str
 
-async def run_agent_query(user_message: str, session_id: str) -> str:
+async def run_agent_query(user_message: str, session_id: str) -> dict:
     """
     Executes the AI Analyst workflow:
     1. Classifies user query into tool selection + arguments.
     2. Executes the selected tool.
     3. Feeds structured tool data + memory history to LLM for final response.
+
+    Returns {"response": str, "chart": dict | None} — chart is populated only when the
+    classifier routed to generate_chart_spec and it succeeded; the LLM never sees or
+    touches the chart's data, only its own natural-language caption.
     """
     product_lookup = get_product_lookup_str()
     
@@ -91,7 +95,7 @@ Your task is to analyze the user's query and decide if we need to call a backend
 
 AVAILABLE BACKEND TOOLS:
 1. `list_products()`: Use when asked what products, items, categories, or catalog options are available to forecast or audit.
-2. `top_selling_products(limit: int)`: Use when asked about highest selling, most popular, or top products by volume. (Default limit: 5)
+2. `top_selling_products(limit: int)`: Use ONLY when the user wants a plain-text LIST or ranking with no visual requested (e.g. "which products sell best?", "what are my top sellers?"). If the phrasing includes "show", "chart", "graph", "plot", "visualize", or names a chart type, use `generate_chart_spec` instead — see tool 11. (Default limit: 5)
 3. `low_stock_products(threshold_days: int)`: Use when asked about items running low, running out of stock, needing replenishment, or restock alerts. (Default threshold_days: 10)
 4. `inventory_health()`: Use when asked about overall stock status, overstock rate, understock rate, or inventory health count.
 5. `sales_summary()`: Use when asked for general sales volume, estimated revenues, and product category breakdowns.
@@ -100,13 +104,21 @@ AVAILABLE BACKEND TOOLS:
 8. `explain_forecast_decomposition(product_id: str)`: Use when asked what drives the forecast, what factors influence demand, how much promotions or weekly seasonality affect future sales, or to show a forecast breakdown.
 9. `model_comparison(product_id: str)`: Use when asked why a model was selected, or to compare validation metrics (MAE, MAPE, R2) for a specific product.
 10. `generate_business_insights()`: Use when asked for business advice, slow-moving items, general recommendations, or business insights.
+11. `generate_chart_spec(chart_type, metric, dimension, product_names, categories, recent_days, limit)`: PREFER THIS TOOL whenever the phrasing implies a visual — "show", "plot", "chart", "graph", "visualize", "compare X and Y [sales/revenue]", or names a chart type like "pie chart"/"bar chart". This takes priority over tools 2/5/6 when both could apply. Examples: "show me a chart of...", "plot revenue by category", "compare Milk and Bread sales", "pie chart of category revenue", "show top 10 products", "show revenue for the last 3 months". Arguments:
+    - chart_type: one of "bar", "line", "donut", "area" (default "bar"; a "pie chart" request means "donut")
+    - metric: one of "units_sold", "revenue", "stock" (default "units_sold")
+    - dimension: one of "product", "category", "date", "day_of_week", "month" (default "category") — what the chart is broken down BY
+    - product_names: array of product names/references mentioned by the user, e.g. ["Milk", "Bread"] — empty array if none mentioned
+    - categories: array of category names mentioned by the user — empty array if none mentioned
+    - recent_days: integer for date-relative requests (e.g. "last 3 months" -> 90, "last 30 days" -> 30), or null if no time range was mentioned
+    - limit: integer, default 10, for "top N" requests
 
 PRODUCT LOOKUP DICTIONARY (Match queries to these exact IDs):
 {product_lookup}
 
 ROUTING RULES:
 - Output a single JSON object with keys: "tool_name" and "arguments".
-- "tool_name" MUST be one of the 10 tools listed above, or "none" if the query is a general greeting, about machine learning concepts, or general help.
+- "tool_name" MUST be one of the 11 tools listed above, or "none" if the query is a general greeting, about machine learning concepts, or general help.
 - "arguments" is a dictionary of parameters for the tool. For example, if product is milk, map it to ID 'PRD_01' based on the lookup list.
 - If the user asks about 'this product' or 'the current product' and didn't specify one, check if a product is mentioned in your lookup or default to the top-selling product ID.
 
@@ -164,6 +176,21 @@ OR
                     tool_output = tools.explain_forecast_decomposition(product_id=pid)
             elif tool_name == "generate_business_insights":
                 tool_output = tools.generate_business_insights()
+            elif tool_name == "generate_chart_spec":
+                # Resolve any free-text product names the classifier extracted into real
+                # catalog IDs, same fuzzy resolver used for every other product-aware tool —
+                # tools.py itself only ever accepts already-resolved IDs.
+                raw_names = tool_args.get("product_names") or []
+                resolved_ids = [resolve_product_id(str(n)) for n in raw_names if str(n).strip()]
+                tool_output = tools.generate_chart_spec(
+                    chart_type=str(tool_args.get("chart_type", "bar")),
+                    metric=str(tool_args.get("metric", "units_sold")),
+                    dimension=str(tool_args.get("dimension", "category")),
+                    product_ids=resolved_ids or None,
+                    categories=tool_args.get("categories") or None,
+                    recent_days=tool_args.get("recent_days"),
+                    limit=tool_args.get("limit", 10),
+                )
             else:
                 tool_output = {
                     "status": "error",
@@ -189,6 +216,7 @@ RULES:
 4. When explaining a forecast decomposition (trend, seasonality, promo percentages), use the exact calculations provided in the context. Explain them clearly, highlighting which driver is the strongest.
 5. When explaining metrics (like MAE, MAPE, R²), reference the 'human_friendly_explanation' template in the context to explain what they mean in simple business terms.
 6. If the structured context indicates an error or no active dataset, politely tell the user to upload a dataset or load the demo.
+7. If the context's metric_type is "chart_spec", a chart is already being rendered separately in the UI — write only a short (1-2 sentence) caption highlighting the standout value(s), do not restate every number from the chart.
 """
     
     # Formulate prompt messages
@@ -222,5 +250,11 @@ RULES:
     # Update session memory
     add_message_to_history(session_id, "user", user_message)
     add_message_to_history(session_id, "assistant", final_response)
-    
-    return final_response
+
+    # Pass the chart spec straight through from the tool's real output to the API
+    # response — never round-tripped through the LLM, so it can't be altered/fabricated.
+    chart = None
+    if tool_name == "generate_chart_spec" and isinstance(tool_output, dict) and tool_output.get("status") == "success":
+        chart = tool_output.get("chart")
+
+    return {"response": final_response, "chart": chart}

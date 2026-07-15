@@ -83,6 +83,20 @@ def test_toolbelt():
     print(f"   Product: {decomp['product_name']} | Model: {decomp['model_used']}")
     print(f"   Decomposition Weights: {decomp['decomposition']}")
 
+    # 10. Test generate_chart_spec (Phase 2 — AI-generated charts)
+    print("\n10. Testing tools.generate_chart_spec()...")
+    chart = tools.generate_chart_spec(chart_type="bar", metric="units_sold", dimension="product", limit=5)
+    print(f"   Status: {chart['status']}")
+    print(f"   Title: {chart['chart']['title']} | chart_type: {chart['chart']['chart_type']}")
+    print(f"   x: {chart['chart']['x']}")
+    print(f"   y: {chart['chart']['y']}")
+
+    print("\n11. Testing tools.generate_chart_spec() with filters (donut, revenue, category, recent_days)...")
+    chart2 = tools.generate_chart_spec(chart_type="pie", metric="revenue", dimension="category", recent_days=90)
+    print(f"   Status: {chart2['status']}")
+    print(f"   chart_type normalized 'pie' -> '{chart2['chart']['chart_type']}' (expected 'donut')")
+    print(f"   x: {chart2['chart']['x']}")
+
     print("\n=== All AI Tools Executed and Verified Successfully! ===")
     return True
 

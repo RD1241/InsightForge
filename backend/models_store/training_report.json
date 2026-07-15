@@ -1,5 +1,5 @@
 {
-    "timestamp": "2026-07-16 01:19:18",
+    "timestamp": "2026-07-16 02:06:24",
     "dataset_rows": 7300,
     "total_products_trained": 5,
     "average_mae": 4.28,
@@ -36,7 +36,7 @@
                     "R2": 0.92
                 }
             },
-            "training_time_seconds": 2.92
+            "training_time_seconds": 8.58
         },
         "PRD_02": {
             "product_id": "PRD_02",
@@ -69,7 +69,7 @@
                     "R2": 0.85
                 }
             },
-            "training_time_seconds": 2.93
+            "training_time_seconds": 8.32
         },
         "PRD_03": {
             "product_id": "PRD_03",
@@ -102,7 +102,7 @@
                     "R2": 0.94
                 }
             },
-            "training_time_seconds": 3.57
+            "training_time_seconds": 8.56
         },
         "PRD_04": {
             "product_id": "PRD_04",
@@ -135,7 +135,7 @@
                     "R2": 0.85
                 }
             },
-            "training_time_seconds": 3.62
+            "training_time_seconds": 8.63
         },
         "PRD_05": {
             "product_id": "PRD_05",
@@ -168,9 +168,9 @@
                     "R2": 0.92
                 }
             },
-            "training_time_seconds": 1.21
+            "training_time_seconds": 0.98
         }
     },
-    "total_training_time_seconds": 4.25,
+    "total_training_time_seconds": 9.44,
     "prophet_available": true
 }

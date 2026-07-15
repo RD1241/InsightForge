@@ -1800,3 +1800,20 @@ a {
     background: rgba(244, 63, 94, 0.1);
 }
 
+/* AI-generated chart embedded in a chat message bubble (Phase 2) */
+.chat-chart-container {
+    margin-top: 10px;
+    width: 100%;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    padding: 4px;
+    box-sizing: border-box;
+}
+
+/* Widen the bubble for messages carrying a chart — the default 85% max-width is sized
+   for text and is too narrow for a legible chart at the chat panel's default width. */
+.message.message-has-chart {
+    max-width: 96%;
+}
+

@@ -450,6 +450,98 @@ def model_comparison(product_id: str) -> dict:
         "all_models_metrics": comparison
     }
 
+CHART_TYPES = {"bar", "line", "donut", "area"}
+CHART_METRICS = {"units_sold", "revenue", "stock"}
+CHART_DIMENSIONS = {"product", "category", "date", "day_of_week", "month"}
+_MONTH_LABELS = {1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
+                 7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'}
+_DAY_LABELS = {0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun'}
+
+def generate_chart_spec(
+    chart_type: str = "bar",
+    metric: str = "units_sold",
+    dimension: str = "category",
+    product_ids: list = None,
+    categories: list = None,
+    start_date: str = None,
+    end_date: str = None,
+    recent_days: int = None,
+    limit: int = 10,
+) -> dict:
+    """
+    Builds a small, chart-ready data spec for the chat's "generate a chart" feature.
+    Every number here comes from real pandas aggregation over the active dataset — the
+    LLM only ever selects WHICH chart to build (chart_type/metric/dimension/filters),
+    never the values, mirroring how every other tool in this module prevents
+    hallucination. Reuses the same filter-then-aggregate approach as
+    core/forecasting/eda.py's generate_eda_report() so a chat-requested chart and the
+    equivalent Sales Insights filtered view always agree with each other.
+
+    product_ids is expected to already be resolved (see agent.py's resolve_product_id) —
+    this function does no fuzzy name matching itself, consistent with how forecast_product/
+    compare_sales/etc. also take a pre-resolved product_id rather than a raw name.
+
+    recent_days is a simpler alternative to start_date for date-relative requests (e.g.
+    "last 3 months" -> recent_days=90) — safer for an LLM to produce reliably than exact
+    calendar dates, mirroring compare_sales()'s existing period_days pattern.
+    """
+    if chart_type not in CHART_TYPES:
+        chart_type = "donut" if chart_type == "pie" else "bar"
+    if metric not in CHART_METRICS:
+        metric = "units_sold"
+    if dimension not in CHART_DIMENSIONS:
+        dimension = "category"
+    limit = max(1, min(int(limit or 10), 25))
+
+    df = get_loaded_df()
+    if product_ids:
+        df = df[df['product_id'].isin(product_ids)]
+    if categories:
+        df = df[df['category'].isin(categories)]
+    if recent_days:
+        cutoff = df['date'].max() - timedelta(days=int(recent_days))
+        df = df[df['date'] >= cutoff]
+    elif start_date or end_date:
+        if start_date:
+            df = df[df['date'] >= pd.to_datetime(start_date)]
+        if end_date:
+            df = df[df['date'] <= pd.to_datetime(end_date)]
+
+    if len(df) == 0:
+        return {"status": "error", "message": "No data matches the requested filters — try a broader date range or different products/categories."}
+
+    df = df.copy()
+    df['revenue'] = df['units_sold'] * df['price']
+    value_col = {"revenue": "revenue", "stock": "stock_on_hand"}.get(metric, "units_sold")
+
+    if dimension == 'product':
+        grouped = df.groupby('product_name')[value_col].sum().sort_values(ascending=False).head(limit)
+    elif dimension == 'date':
+        grouped = df.groupby(df['date'].dt.strftime('%Y-%m-%d'))[value_col].sum().sort_index()
+    elif dimension == 'day_of_week':
+        grouped = df.groupby(df['date'].dt.dayofweek)[value_col].sum().sort_index()
+        grouped.index = grouped.index.map(_DAY_LABELS)
+    elif dimension == 'month':
+        grouped = df.groupby(df['date'].dt.month)[value_col].sum().sort_index()
+        grouped.index = grouped.index.map(_MONTH_LABELS)
+    else:  # category
+        grouped = df.groupby('category')[value_col].sum().sort_values(ascending=False)
+
+    metric_label = {"revenue": "Revenue (₹)", "stock": "Stock on Hand"}.get(metric, "Units Sold")
+    title = f"{metric_label} by {dimension.replace('_', ' ').title()}"
+
+    return {
+        "status": "success",
+        "metric_type": "chart_spec",
+        "chart": {
+            "chart_type": chart_type,
+            "title": title,
+            "x": [str(v) for v in grouped.index.tolist()],
+            "y": [round(float(v), 2) for v in grouped.values],
+            "series_label": metric_label
+        }
+    }
+
 def generate_business_insights() -> dict:
     """
     Compiles automated high-level insights by auditing sales patterns,

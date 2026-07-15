@@ -2503,7 +2503,11 @@ document.addEventListener("DOMContentLoaded", () => {
             
             if (response.ok) {
                 const data = await response.json();
-                appendMessage(data.response, "bot");
+                const msgDiv = appendMessage(data.response, "bot");
+                if (data.chart) {
+                    msgDiv.classList.add("message-has-chart");
+                    renderChatChart(data.chart, msgDiv.querySelector(".message-content"));
+                }
             } else {
                 appendMessage("I couldn't retrieve that information right now. Please make sure your forecasting models have been trained, then try again.", "bot");
             }
@@ -2538,6 +2542,69 @@ document.addEventListener("DOMContentLoaded", () => {
         
         el.chatMessages.appendChild(msgDiv);
         lucide.createIcons();
+        return msgDiv;
+    }
+
+    // Renders an AI-generated chart (Phase 2) inside a chat message bubble. `spec` is
+    // {chart_type, title, x, y, series_label} — every number in it already came straight
+    // from tools.generate_chart_spec()'s real pandas aggregation, nothing here is
+    // LLM-authored. Bar charts render horizontally (compact margins, not the full
+    // Sales Insights horizontalRankingLayout() sizing, since a chat bubble is much
+    // narrower than a dashboard card) to keep product/category labels readable.
+    let chatChartCounter = 0;
+    function renderChatChart(spec, container) {
+        chatChartCounter += 1;
+        const chartId = `chat-chart-${chatChartCounter}`;
+        const chartDiv = document.createElement("div");
+        chartDiv.className = "chat-chart-container";
+        chartDiv.id = chartId;
+        container.appendChild(chartDiv);
+
+        let trace;
+        let layout = {
+            title: { text: spec.title, font: { size: 12, color: '#e2e8f0' } },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#94a3b8', family: 'Outfit, Inter, sans-serif', size: 10 },
+            margin: { t: 34, r: 15, b: 30, l: 40 },
+            height: 220
+        };
+
+        if (spec.chart_type === "donut") {
+            trace = {
+                labels: spec.x, values: spec.y, type: 'pie', hole: 0.55,
+                marker: { colors: ['#6366f1', '#34d399', '#f59e0b', '#38bdf8', '#f43f5e', '#a78bfa'] },
+                textinfo: 'percent', textfont: { color: '#e2e8f0', size: 10 },
+                hovertemplate: '%{label}: %{value:,.2f}<extra></extra>'
+            };
+            layout.showlegend = true;
+            layout.legend = { orientation: 'h', y: -0.15, font: { size: 9 } };
+            layout.margin = { t: 34, r: 10, b: 10, l: 10 };
+        } else if (spec.chart_type === "line" || spec.chart_type === "area") {
+            trace = {
+                x: spec.x, y: spec.y, type: 'scatter', mode: 'lines+markers',
+                line: { color: '#6366f1', width: 2.5, shape: 'spline' },
+                marker: { color: '#6366f1', size: 4 },
+                fill: spec.chart_type === "area" ? 'tozeroy' : 'none',
+                fillcolor: 'rgba(99, 102, 241, 0.08)',
+                hovertemplate: `%{x}<br>%{y:,.2f} ${escapeHtml(spec.series_label || "")}<extra></extra>`
+            };
+            layout.xaxis = { gridcolor: 'rgba(255,255,255,0.04)', linecolor: 'rgba(255,255,255,0.06)', tickfont: { size: 9 } };
+            layout.yaxis = { gridcolor: 'rgba(255,255,255,0.04)', linecolor: 'rgba(255,255,255,0.06)', tickfont: { size: 9 } };
+        } else {
+            // Horizontal ranking bar — same single-hue-for-magnitude convention as
+            // horizontalRankingLayout() in Sales Insights, compacted for a chat bubble.
+            trace = {
+                x: spec.y, y: spec.x, type: 'bar', orientation: 'h',
+                marker: { color: '#6366f1', opacity: 0.85 },
+                hovertemplate: `%{y}: %{x:,.2f} ${escapeHtml(spec.series_label || "")}<extra></extra>`
+            };
+            layout.margin = { t: 34, r: 15, b: 25, l: 90 };
+            layout.xaxis = { gridcolor: 'rgba(255,255,255,0.04)', linecolor: 'rgba(255,255,255,0.06)', tickfont: { size: 9 } };
+            layout.yaxis = { autorange: 'reversed', gridcolor: 'rgba(255,255,255,0.02)', linecolor: 'rgba(255,255,255,0.06)', tickfont: { size: 9 } };
+        }
+
+        Plotly.newPlot(chartId, [trace], layout, { responsive: true, displayModeBar: false });
     }
 
     function appendTypingIndicator() {

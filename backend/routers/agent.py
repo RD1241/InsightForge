@@ -20,10 +20,8 @@ async def chat_with_analyst(request: ChatRequest):
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
         
     try:
-        response_text = await run_agent_query(request.message, request.session_id)
-        return {
-            "response": response_text
-        }
+        result = await run_agent_query(request.message, request.session_id)
+        return result
     except Exception as e:
         import logging
         logger = logging.getLogger("insightforge")
