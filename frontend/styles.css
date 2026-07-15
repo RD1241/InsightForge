@@ -1800,6 +1800,19 @@ a {
     background: rgba(244, 63, 94, 0.1);
 }
 
+/* Pre-Training AI Preview card (Phase 3) */
+.pretrain-card {
+    border-left: 3px solid var(--accent);
+    padding: 14px 18px;
+}
+.pretrain-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--accent-light);
+}
+
 /* AI-generated chart embedded in a chat message bubble (Phase 2) */
 .chat-chart-container {
     margin-top: 10px;

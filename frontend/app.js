@@ -239,6 +239,9 @@ document.addEventListener("DOMContentLoaded", () => {
         trainingProgressBox: document.getElementById("training-progress-box"),
         trainingProgressFill: document.getElementById("training-progress-fill"),
         trainingProgressText: document.getElementById("training-progress-text"),
+        pretrainCard: document.getElementById("pretrain-recommendation-card"),
+        pretrainReasonText: document.getElementById("pretrain-reason-text"),
+        pretrainPriceNote: document.getElementById("pretrain-price-note"),
         forecastSummaryContainer: document.getElementById("forecast-summary-container"),
         registryAvgMae: document.getElementById("registry-avg-mae") || null,
         registryAvgMape: document.getElementById("registry-avg-mape") || null,
@@ -1885,7 +1888,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // --- Forecasting Page Logic ---
+    async function loadPreTrainAnalysis() {
+        if (!el.pretrainCard) return;
+        try {
+            const analysis = await api.get("/api/forecast/pre-train-analysis");
+            el.pretrainReasonText.textContent = analysis.reason;
+            el.pretrainPriceNote.textContent = analysis.price_note;
+            el.pretrainCard.classList.remove("hidden");
+        } catch (error) {
+            el.pretrainCard.classList.add("hidden");
+        }
+    }
+
     async function loadForecastingPage() {
+        loadPreTrainAnalysis();
         try {
             // Check if training report exists in backend
             const report = await api.get("/api/forecast/report").catch(() => null);
@@ -1916,37 +1932,54 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Trigger Model Training
+    // Trigger Model Training — polls the real backend progress endpoint (current
+    // product/model, products completed) instead of simulating a fake bar. The POST
+    // /train request is fired without an inline await so the poll loop below can run
+    // concurrently while it's in flight (the backend offloads training to a thread
+    // pool, so the event loop stays free to serve the progress GET the whole time).
     el.trainModelsBtn.addEventListener("click", async () => {
         state.isTraining = true;
         el.trainingProgressBox.classList.remove("hidden");
         el.trainModelsBtn.disabled = true;
-        
-        // Progress bar simulation (fitting ML trees usually takes 4-7s, Prophet about 1.5s per product)
-        let progress = 0;
-        const progressInterval = setInterval(() => {
-            if (progress < 90) {
-                progress += Math.random() * 8;
-                progress = Math.min(progress, 90);
-                el.trainingProgressFill.style.width = `${progress}%`;
-                if (progress > 60) {
-                    el.trainingProgressText.textContent = "Selecting the best forecasting engine for each product...";
-                } else if (progress > 30) {
-                    el.trainingProgressText.textContent = "Learning seasonal and holiday demand patterns...";
-                } else {
-                    el.trainingProgressText.textContent = "Preparing your sales history for analysis...";
+        el.trainingProgressFill.style.backgroundColor = "";
+        el.trainingProgressFill.style.width = "0%";
+        el.trainingProgressText.textContent = "Starting training run...";
+
+        const smoothOutliers = el.smoothOutliersCheck ? el.smoothOutliersCheck.checked : true;
+        const trainStartedAt = Date.now();
+        const trainPromise = api.post(`/api/forecast/train?smooth_outliers=${smoothOutliers}`);
+
+        const pollInterval = setInterval(async () => {
+            try {
+                const progress = await api.get("/api/forecast/train/progress");
+                if (progress.status === "running" && progress.total > 0) {
+                    const pct = Math.min(99, Math.round((progress.completed / progress.total) * 100));
+                    el.trainingProgressFill.style.width = `${pct}%`;
+
+                    let etaText = "";
+                    if (progress.completed > 0) {
+                        const elapsedSec = (Date.now() - trainStartedAt) / 1000;
+                        const secPerProduct = elapsedSec / progress.completed;
+                        const remainingSec = Math.max(0, Math.round(secPerProduct * (progress.total - progress.completed)));
+                        etaText = ` · ~${remainingSec}s remaining`;
+                    }
+                    const productLabel = progress.current_product_name ? ` — ${progress.current_product_name}` : "";
+                    const modelLabel = progress.current_model ? ` (${progress.current_model})` : "";
+                    el.trainingProgressText.textContent =
+                        `Training product ${progress.completed} of ${progress.total}${productLabel}${modelLabel}${etaText}`;
                 }
+            } catch (err) {
+                // Non-fatal — trainPromise below is the authoritative success/failure signal
             }
-        }, 300);
-        
+        }, 750);
+
         try {
-            const smoothOutliers = el.smoothOutliersCheck ? el.smoothOutliersCheck.checked : true;
-            const data = await api.post(`/api/forecast/train?smooth_outliers=${smoothOutliers}`);
-            clearInterval(progressInterval);
+            const data = await trainPromise;
+            clearInterval(pollInterval);
             el.trainingProgressFill.style.width = "100%";
             el.trainingProgressText.textContent = "Training optimization complete!";
             showToast("Forecasting models trained successfully!", "success");
-            
+
             state.isTraining = false;
             setTimeout(() => {
                 el.trainingProgressBox.classList.add("hidden");
@@ -1954,9 +1987,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 el.forecastEmptyState.classList.add("hidden");
                 displayTrainingReport(data.report);
             }, 1000);
-            
+
         } catch (error) {
-            clearInterval(progressInterval);
+            clearInterval(pollInterval);
             state.isTraining = false;
             el.trainingProgressText.textContent = `Training failed: ${error.message}`;
             el.trainingProgressFill.style.backgroundColor = "var(--error)";

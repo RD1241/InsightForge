@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
@@ -15,6 +16,51 @@ from core.forecasting.registry import (
     save_model_file, save_registry_batch, save_training_report, get_best_model_metadata,
     load_model, get_product_models
 )
+
+# --- Live Training Progress (polled by GET /api/forecast/train/progress) ---
+# Updated from inside _train_single_product(), which runs in worker threads — never
+# from the collection loop in run_training_pipeline(), which only observes futures in
+# submission order and would misrepresent real concurrent progress with 4 workers.
+# "current_model"/"current_product" reflect whichever thread most recently touched them
+# (a reasonable, standard simplification for a parallel batch progress display — the
+# "completed"/"total" counts are what the percentage/ETA are actually based on).
+_progress_lock = threading.Lock()
+_training_progress = {
+    "status": "idle",  # idle | running | complete
+    "total": 0,
+    "completed": 0,
+    "current_product_id": None,
+    "current_product_name": None,
+    "current_model": None,
+}
+
+def get_training_progress() -> dict:
+    with _progress_lock:
+        return dict(_training_progress)
+
+def _reset_training_progress(total: int):
+    with _progress_lock:
+        _training_progress.update({
+            "status": "running", "total": total, "completed": 0,
+            "current_product_id": None, "current_product_name": None, "current_model": None
+        })
+
+def _set_training_progress_current(product_id: str, product_name: str, model_name: str):
+    with _progress_lock:
+        _training_progress["current_product_id"] = product_id
+        _training_progress["current_product_name"] = product_name
+        _training_progress["current_model"] = model_name
+
+def _increment_training_progress():
+    with _progress_lock:
+        _training_progress["completed"] += 1
+
+def _finish_training_progress():
+    with _progress_lock:
+        _training_progress["status"] = "complete"
+        _training_progress["current_product_id"] = None
+        _training_progress["current_product_name"] = None
+        _training_progress["current_model"] = None
 
 def _recursive_validation_predict(model, train_df: pd.DataFrame, test_df: pd.DataFrame) -> np.ndarray:
     """
@@ -93,80 +139,87 @@ def _train_single_product(pid: str, df_features: pd.DataFrame, prophet_available
     prod_df = df_features[df_features['product_id'] == pid].copy()
     p_name = prod_df['product_name'].iloc[0]
     category = prod_df['category'].iloc[0]
-    
+
     # 30-day chronological split (standard for retail forecasting evaluation)
     train_df = prod_df.iloc[:-30].copy()
     test_df = prod_df.iloc[-30:].copy()
-    
+
     if len(train_df) < 14:
+        _increment_training_progress()
         return None
-        
-    y_test = test_df['units_sold'].values
-    models_trained = {}
-    # Staged registry entries for this product's models — returned to the caller, which
-    # batches every product's entries into a single registry write for the whole run
-    # instead of one read-modify-write per model here.
-    registry_entries = {}
 
-    # --- Model 1: Ridge Regression (interpretable linear baseline) ---
-    ridge_model = RidgeRegressionModel()
-    ridge_model.fit(train_df)
-    ridge_preds = _recursive_validation_predict(ridge_model, train_df, test_df)
-    ridge_metrics = evaluate_predictions(y_test, ridge_preds)
-    ridge_filename, _ = save_model_file(pid, "Ridge Regression", ridge_model)
-    registry_entries["Ridge Regression"] = {"metrics": ridge_metrics, "filename": ridge_filename}
-    models_trained["Ridge Regression"] = ridge_metrics
+    try:
+        y_test = test_df['units_sold'].values
+        models_trained = {}
+        # Staged registry entries for this product's models — returned to the caller, which
+        # batches every product's entries into a single registry write for the whole run
+        # instead of one read-modify-write per model here.
+        registry_entries = {}
 
-    # --- Model 2: Gradient Boosting (replaces Random Forest — see models.py for rationale) ---
-    gb_model = GradientBoostingModel()
-    gb_model.fit(train_df)
-    gb_preds = _recursive_validation_predict(gb_model, train_df, test_df)
-    gb_metrics = evaluate_predictions(y_test, gb_preds)
-    gb_filename, _ = save_model_file(pid, "Gradient Boosting", gb_model)
-    registry_entries["Gradient Boosting"] = {"metrics": gb_metrics, "filename": gb_filename}
-    models_trained["Gradient Boosting"] = gb_metrics
+        # --- Model 1: Ridge Regression (interpretable linear baseline) ---
+        _set_training_progress_current(pid, p_name, "Ridge Regression")
+        ridge_model = RidgeRegressionModel()
+        ridge_model.fit(train_df)
+        ridge_preds = _recursive_validation_predict(ridge_model, train_df, test_df)
+        ridge_metrics = evaluate_predictions(y_test, ridge_preds)
+        ridge_filename, _ = save_model_file(pid, "Ridge Regression", ridge_model)
+        registry_entries["Ridge Regression"] = {"metrics": ridge_metrics, "filename": ridge_filename}
+        models_trained["Ridge Regression"] = ridge_metrics
 
-    # --- Model 3: Prophet (if available) ---
-    # NOTE ON EVALUATION METHODOLOGY (CRIT-02):
-    # Prophet operates as an additive regression model fitting trend and seasonal Fourier series using
-    # the datetime ds field directly. Unlike recursive autoregressive ML models (Ridge Regression,
-    # Gradient Boosting) which rely on lag features constructed step-by-step from predictions during validation,
-    # Prophet does not use lagged features. Thus, Prophet is evaluated by invoking its native
-    # prophet_model.predict(test_df) API directly on the test dates, rather than inside the recursive validation
-    # loop. This methodological difference is mathematically sound and matches how each model serves in production.
-    if prophet_available:
-        try:
-            prophet_model = ProphetModel()
-            prophet_model.fit(train_df)
-            prophet_res    = prophet_model.predict(test_df)
-            prophet_preds  = prophet_res["predictions"]
-            prophet_metrics = evaluate_predictions(y_test, prophet_preds)
-            prophet_filename, _ = save_model_file(pid, "Prophet", prophet_model)
-            registry_entries["Prophet"] = {"metrics": prophet_metrics, "filename": prophet_filename}
-            models_trained["Prophet"] = prophet_metrics
-        except Exception as e:
-            # Fallback silently on compile errors
-            print(f"Prophet failed to train for product {pid}: {str(e)}")
+        # --- Model 2: Gradient Boosting (replaces Random Forest — see models.py for rationale) ---
+        _set_training_progress_current(pid, p_name, "Gradient Boosting")
+        gb_model = GradientBoostingModel()
+        gb_model.fit(train_df)
+        gb_preds = _recursive_validation_predict(gb_model, train_df, test_df)
+        gb_metrics = evaluate_predictions(y_test, gb_preds)
+        gb_filename, _ = save_model_file(pid, "Gradient Boosting", gb_model)
+        registry_entries["Gradient Boosting"] = {"metrics": gb_metrics, "filename": gb_filename}
+        models_trained["Gradient Boosting"] = gb_metrics
 
-    # --- Robust Model Recommendation Heuristics ---
-    # Reject models with negative validation R2 unless all have R2 <= 0.
-    valid_models = {m: metrics for m, metrics in models_trained.items() if metrics["R2"] > 0}
-    if not valid_models:
-        valid_models = models_trained
-        
-    best_model_name = min(valid_models, key=lambda k: valid_models[k]["MAE"])
-    best_metrics = models_trained[best_model_name]
-    
-    summary = {
-        "product_id": pid,
-        "product_name": p_name,
-        "category": category,
-        "best_model": best_model_name,
-        "best_metrics": best_metrics,
-        "all_models": models_trained,
-        "training_time_seconds": round(time.time() - product_start, 2)
-    }
-    return pid, summary, registry_entries
+        # --- Model 3: Prophet (if available) ---
+        # NOTE ON EVALUATION METHODOLOGY (CRIT-02):
+        # Prophet operates as an additive regression model fitting trend and seasonal Fourier series using
+        # the datetime ds field directly. Unlike recursive autoregressive ML models (Ridge Regression,
+        # Gradient Boosting) which rely on lag features constructed step-by-step from predictions during validation,
+        # Prophet does not use lagged features. Thus, Prophet is evaluated by invoking its native
+        # prophet_model.predict(test_df) API directly on the test dates, rather than inside the recursive validation
+        # loop. This methodological difference is mathematically sound and matches how each model serves in production.
+        if prophet_available:
+            _set_training_progress_current(pid, p_name, "Prophet")
+            try:
+                prophet_model = ProphetModel()
+                prophet_model.fit(train_df)
+                prophet_res    = prophet_model.predict(test_df)
+                prophet_preds  = prophet_res["predictions"]
+                prophet_metrics = evaluate_predictions(y_test, prophet_preds)
+                prophet_filename, _ = save_model_file(pid, "Prophet", prophet_model)
+                registry_entries["Prophet"] = {"metrics": prophet_metrics, "filename": prophet_filename}
+                models_trained["Prophet"] = prophet_metrics
+            except Exception as e:
+                # Fallback silently on compile errors
+                print(f"Prophet failed to train for product {pid}: {str(e)}")
+
+        # --- Robust Model Recommendation Heuristics ---
+        # Reject models with negative validation R2 unless all have R2 <= 0.
+        valid_models = {m: metrics for m, metrics in models_trained.items() if metrics["R2"] > 0}
+        if not valid_models:
+            valid_models = models_trained
+
+        best_model_name = min(valid_models, key=lambda k: valid_models[k]["MAE"])
+        best_metrics = models_trained[best_model_name]
+
+        summary = {
+            "product_id": pid,
+            "product_name": p_name,
+            "category": category,
+            "best_model": best_model_name,
+            "best_metrics": best_metrics,
+            "all_models": models_trained,
+            "training_time_seconds": round(time.time() - product_start, 2)
+        }
+        return pid, summary, registry_entries
+    finally:
+        _increment_training_progress()
 
 def run_training_pipeline(df_raw: pd.DataFrame, smooth_outliers_flag: bool = True) -> dict:
     """
@@ -190,6 +243,8 @@ def run_training_pipeline(df_raw: pd.DataFrame, smooth_outliers_flag: bool = Tru
     product_summaries = {}
     all_registry_entries = {}
 
+    _reset_training_progress(total=len(unique_products))
+
     # Parallel training using ThreadPoolExecutor
     # Bypasses Python ProcessPool pickling issues on Windows while parallelizing Stan / C++ fits
     max_workers = min(len(unique_products), 4)
@@ -204,6 +259,8 @@ def run_training_pipeline(df_raw: pd.DataFrame, smooth_outliers_flag: bool = Tru
                 pid, summary, registry_entries = res
                 product_summaries[pid] = summary
                 all_registry_entries[pid] = registry_entries
+
+    _finish_training_progress()
 
     # One registry read-modify-write for the entire training run, instead of once per
     # product (or once per model) — see save_registry_batch() for why this matters at scale.

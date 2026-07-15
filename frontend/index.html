@@ -556,6 +556,20 @@
                         </div>
                     </div>
 
+                    <!-- Pre-Training AI Preview — a cheap, model-free heuristic shown before Train is
+                         clicked. Explicitly framed as a preview, not a promise: the actual winner is
+                         always whichever model validates best once training runs. -->
+                    <div class="card glassmorphic mt-4 pretrain-card hidden" id="pretrain-recommendation-card">
+                        <div class="flex-row align-center gap-3">
+                            <div class="card-title-icon"><i data-lucide="sparkles"></i></div>
+                            <div>
+                                <div class="pretrain-label">Before You Train — AI Preview</div>
+                                <p class="mt-1" id="pretrain-reason-text">Analyzing your dataset...</p>
+                                <p class="text-secondary text-xs mt-1" id="pretrain-price-note"></p>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Model Not Trained Empty State -->
                     <div class="card glassmorphic mt-6 text-center" id="forecast-empty-state">
                         <div class="card-body p-8 flex-col align-center justify-center gap-4">
