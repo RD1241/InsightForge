@@ -294,10 +294,7 @@ document.addEventListener("DOMContentLoaded", () => {
         learningGlossaryTab: document.getElementById("learning-glossary-tab"),
         learningContent: document.getElementById("learning-content"),
         metricHeaderInfos: document.querySelectorAll(".metric-header-info"),
-        
-        // Export PDF Button
-        exportReportBtn: document.getElementById("export-report-btn"),
-        
+
         // Chart Loaders
         loaderSalesTrend: document.getElementById("loader-sales-trend"),
         loaderCorrelation: document.getElementById("loader-correlation"),
@@ -3074,108 +3071,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Export PDF Report print triggers
-    if (el.exportReportBtn) {
-        el.exportReportBtn.addEventListener("click", async () => {
-            if (!state.activeProduct || !state.trainedReport || !state.datasetStats) {
-                showToast("Please ensure dataset and forecasts are loaded before exporting.", "warning");
-                return;
-            }
-            
-            const productId = state.activeProduct;
-            const prodData = state.trainedReport.products[productId];
-            const activeModel = el.forecastModelSelect.value;
-            
-            let modelName = prodData.best_model;
-            let mae = prodData.all_models[modelName].MAE;
-            let mape = prodData.all_models[modelName].MAPE + "%";
-            let r2 = prodData.all_models[modelName].R2;
-
-            if (activeModel !== "best_recommender" && prodData.all_models[activeModel]) {
-                modelName = activeModel;
-                mae = prodData.all_models[activeModel].MAE;
-                mape = prodData.all_models[activeModel].MAPE + "%";
-                r2 = prodData.all_models[activeModel].R2;
-            }
-            
-            // 1. Populate metadata
-            document.getElementById("print-timestamp").textContent = "Generated on: " + new Date().toLocaleString();
-            document.getElementById("print-stat-records").textContent = state.datasetStats.row_count.toLocaleString();
-            document.getElementById("print-stat-stores").textContent = state.datasetStats.unique_stores;
-            document.getElementById("print-stat-products").textContent = state.datasetStats.unique_products;
-            document.getElementById("print-stat-categories").textContent = state.datasetStats.unique_categories;
-            document.getElementById("print-stat-dates").textContent = `${state.datasetStats.start_date} to ${state.datasetStats.end_date}`;
-            
-            // 2. Populate product forecast stats. The manager-facing section only gets a
-            // plain confidence label; the raw model name/MAE/MAPE go to the Appendix instead.
-            document.getElementById("print-product-name").textContent = `${prodData.product_name} (${productId})`;
-            document.getElementById("print-confidence").textContent = getConfidenceLabel(r2);
-            document.getElementById("print-best-model").textContent = modelName;
-            document.getElementById("print-mae").textContent = mae;
-            document.getElementById("print-mape").textContent = mape;
-            
-            // 3. Populate model comparison table
-            const models = Object.keys(prodData.all_models);
-            let printCompareHtml = "";
-            models.forEach(m => {
-                const mData = prodData.all_models[m];
-                printCompareHtml += `
-                    <tr>
-                        <td>${escapeHtml(m)} ${m === prodData.best_model ? '(Recommended)' : ''}</td>
-                        <td>${escapeHtml(mData.MAE)}</td>
-                        <td>${escapeHtml(mData.MAPE)}%</td>
-                        <td>${escapeHtml(mData.R2)}</td>
-                    </tr>
-                `;
-            });
-            document.querySelector("#print-metrics-table tbody").innerHTML = printCompareHtml;
-            
-            // 4. Populate AI Analyst summary paragraph. Counts whole message bubbles, not <p>
-            // tags — the welcome bubble alone has 2 paragraphs ("Hello! I'm your Retail
-            // Business Advisor..." / "How can I help you today?"), so a per-<p> count was
-            // always > 1 even when the user had never actually chatted, and grabbing the last
-            // <p> also silently truncated a real multi-paragraph reply to just its closing line.
-            const botMessages = document.querySelectorAll(".message-bot .message-content");
-            let aiSummaryHtml = "";
-            if (botMessages.length > 1) {
-                // Get the last bot message content (skipping welcome)
-                aiSummaryHtml = botMessages[botMessages.length - 1].innerHTML;
-            } else {
-                // prodData (from the training report) never carries recommendation_reason — only
-                // the per-request /api/forecast/predict response does, cached in state.forecastData.
-                aiSummaryHtml = renderMarkdownSafely(
-                    (state.forecastData && state.forecastData.recommendation_reason) || "No custom audit logs generated yet."
-                );
-            }
-            document.getElementById("print-ai-summary").innerHTML = aiSummaryHtml;
-            
-            // 5. Convert Plotly SVG to image and trigger browser print dialog
-            el.exportReportBtn.disabled = true;
-            const originalBtnText = el.exportReportBtn.innerHTML;
-            el.exportReportBtn.innerHTML = "<span>Generating Image...</span>";
-            
-            try {
-                const dataUrl = await Plotly.toImage(document.getElementById('chart-forecast'), {
-                    format: 'png',
-                    width: 800,
-                    height: 400
-                });
-                
-                document.getElementById('print-forecast-chart').src = dataUrl;
-                
-                // Trigger printing
-                window.print();
-            } catch (err) {
-                console.error("Failed to generate chart image for print:", err);
-                showToast("Could not render chart into PDF. Printing text details instead.", "warning");
-                window.print();
-            } finally {
-                el.exportReportBtn.disabled = false;
-                el.exportReportBtn.innerHTML = originalBtnText;
-            }
-        });
-    }
-
     // Offline overlay retry connection binding
     if (el.retryConnectionBtn) {
         el.retryConnectionBtn.addEventListener("click", () => {
@@ -3189,17 +3084,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 btnSpan.textContent = originalText;
             });
         });
-    }
-
-    // Plain-language reliability tier from R² — used by the exported report's
-    // "Forecast Confidence" line. No stars: plain text matches the Forecast Accuracy
-    // tile's convention on the dashboard.
-    function getConfidenceLabel(r2) {
-        if (r2 >= 0.90) return "Excellent";
-        if (r2 >= 0.80) return "Very Good";
-        if (r2 >= 0.70) return "Good";
-        if (r2 >= 0.50) return "Fair";
-        return "Limited";
     }
 
     // Business-facing accuracy tile label — deliberately separate from
