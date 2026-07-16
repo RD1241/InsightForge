@@ -47,23 +47,25 @@ def list_products() -> dict:
     except Exception as e:
         return {"status": "error", "message": f"Failed to list product catalog: {str(e)}"}
 
-def top_selling_products(limit: int = 5) -> dict:
+def top_selling_products(limit: int = 5, sort_order: str = "desc") -> dict:
     """
-    Returns the top selling products by total sales volume and total revenue.
+    Returns the top (or, with sort_order="asc", the worst) selling products by total
+    sales volume and total revenue.
     """
     df = get_loaded_df()
-    
+
     # Group by product
     product_totals = df.groupby(['product_id', 'product_name', 'category']).agg(
         total_sales=('units_sold', 'sum'),
         avg_price=('price', 'mean')
     ).reset_index()
-    
+
     product_totals['total_revenue'] = round(product_totals['total_sales'] * product_totals['avg_price'], 2)
     product_totals['total_sales'] = product_totals['total_sales'].astype(int)
-    
-    top_products = product_totals.sort_values(by='total_sales', ascending=False).head(limit)
-    
+
+    ascending = str(sort_order).lower() == "asc"
+    top_products = product_totals.sort_values(by='total_sales', ascending=ascending).head(limit)
+
     return {
         "status": "success",
         "metric_type": "top_selling_products",
@@ -467,6 +469,7 @@ def generate_chart_spec(
     end_date: str = None,
     recent_days: int = None,
     limit: int = 10,
+    sort_order: str = "desc",
 ) -> dict:
     """
     Builds a small, chart-ready data spec for the chat's "generate a chart" feature.
@@ -484,6 +487,12 @@ def generate_chart_spec(
     recent_days is a simpler alternative to start_date for date-relative requests (e.g.
     "last 3 months" -> recent_days=90) — safer for an LLM to produce reliably than exact
     calendar dates, mirroring compare_sales()'s existing period_days pattern.
+
+    sort_order controls ranking direction for the product/category dimensions ("desc" for
+    "top"/"highest"/"best" requests, "asc" for "lowest"/"least"/"worst"/"bottom" requests).
+    Only affects product/category — date/day_of_week/month stay in their natural
+    chronological/calendar order regardless, since "ascending by value" would scramble a
+    time series into something unreadable.
     """
     if chart_type not in CHART_TYPES:
         chart_type = "donut" if chart_type == "pie" else "bar"
@@ -492,6 +501,7 @@ def generate_chart_spec(
     if dimension not in CHART_DIMENSIONS:
         dimension = "category"
     limit = max(1, min(int(limit or 10), 25))
+    ascending = str(sort_order).lower() == "asc"
 
     df = get_loaded_df()
     if product_ids:
@@ -532,7 +542,7 @@ def generate_chart_spec(
         chart_type = 'line'
 
     if dimension == 'product':
-        grouped = df.groupby('product_name')[value_col].sum().sort_values(ascending=False).head(limit)
+        grouped = df.groupby('product_name')[value_col].sum().sort_values(ascending=ascending).head(limit)
     elif dimension == 'date':
         grouped = df.groupby(df['date'].dt.strftime('%Y-%m-%d'))[value_col].sum().sort_index()
     elif dimension == 'day_of_week':
@@ -542,10 +552,15 @@ def generate_chart_spec(
         grouped = df.groupby(df['date'].dt.month)[value_col].sum().sort_index()
         grouped.index = grouped.index.map(_MONTH_LABELS)
     else:  # category
-        grouped = df.groupby('category')[value_col].sum().sort_values(ascending=False)
+        grouped = df.groupby('category')[value_col].sum().sort_values(ascending=ascending)
 
     metric_label = {"revenue": "Revenue (₹)", "stock": "Stock on Hand", "profit": "Profit (₹)"}.get(metric, "Units Sold")
     title = f"{metric_label} by {dimension.replace('_', ' ').title()}"
+    if ascending and dimension in ('product', 'category'):
+        # Only worth calling out explicitly for the less-common "lowest" direction — a
+        # plain title already implies "top" by convention, matching prior behavior when
+        # this parameter didn't exist.
+        title += " (Lowest first)"
 
     return {
         "status": "success",

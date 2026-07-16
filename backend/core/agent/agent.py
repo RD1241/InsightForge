@@ -95,7 +95,7 @@ Your task is to analyze the user's query and decide if we need to call a backend
 
 AVAILABLE BACKEND TOOLS:
 1. `list_products()`: Use when asked what products, items, categories, or catalog options are available to forecast or audit.
-2. `top_selling_products(limit: int)`: Use ONLY when the user wants a plain-text LIST or ranking with no visual requested (e.g. "which products sell best?", "what are my top sellers?"). If the phrasing includes "show", "chart", "graph", "plot", "visualize", or names a chart type, use `generate_chart_spec` instead — see tool 11. (Default limit: 5)
+2. `top_selling_products(limit: int, sort_order: str)`: Use ONLY when the user wants a plain-text LIST or ranking with no visual requested (e.g. "which products sell best?", "what are my top sellers?", "worst selling products"). If the phrasing includes "show", "chart", "graph", "plot", "visualize", or names a chart type, use `generate_chart_spec` instead — see tool 11. (Default limit: 5; sort_order: "desc" default for "top"/"best", "asc" for "worst"/"lowest"/"least selling" — this changes which products are returned, not just their order)
 3. `low_stock_products(threshold_days: int)`: Use when asked about items running low, running out of stock, needing replenishment, or restock alerts. (Default threshold_days: 10)
 4. `inventory_health()`: Use when asked about overall stock status, overstock rate, understock rate, or inventory health count.
 5. `sales_summary()`: Use when asked for general sales volume, estimated revenues, and product category breakdowns.
@@ -112,6 +112,7 @@ AVAILABLE BACKEND TOOLS:
     - categories: array of category names mentioned by the user — empty array if none mentioned
     - recent_days: integer for date-relative requests (e.g. "last 3 months" -> 90, "last 30 days" -> 30), or null if no time range was mentioned
     - limit: integer, default 10, for "top N" requests
+    - sort_order: "desc" (default) for "top"/"highest"/"most"/"best" requests, or "asc" for "lowest"/"least"/"worst"/"smallest"/"bottom" requests — get this right, since it changes which products actually appear in the chart, not just their visual order
 
 PRODUCT LOOKUP DICTIONARY (Match queries to these exact IDs):
 {product_lookup}
@@ -155,7 +156,7 @@ OR
                 tool_output = tools.list_products()
             elif tool_name == "top_selling_products":
                 limit = int(tool_args.get("limit", 5))
-                tool_output = tools.top_selling_products(limit=limit)
+                tool_output = tools.top_selling_products(limit=limit, sort_order=str(tool_args.get("sort_order", "desc")))
             elif tool_name == "low_stock_products":
                 days = int(tool_args.get("threshold_days", 10))
                 tool_output = tools.low_stock_products(threshold_days=days)
@@ -190,6 +191,7 @@ OR
                     categories=tool_args.get("categories") or None,
                     recent_days=tool_args.get("recent_days"),
                     limit=tool_args.get("limit", 10),
+                    sort_order=str(tool_args.get("sort_order", "desc")),
                 )
             else:
                 tool_output = {
