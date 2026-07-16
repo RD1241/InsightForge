@@ -26,11 +26,12 @@ _registry_lock = threading.Lock()
 
 def get_recommendation_reason(model_name: str, metrics: dict) -> str:
     """
-    Returns a plain-language, business-facing explanation for why a specific model is
-    recommended. Deliberately omits raw metric values (MAE/R²/MAPE) — those are for
-    technical reference and stay in the Advanced Technical Details table; a retail
-    manager doesn't need "MAE = 6.71" to trust a recommendation, they need to know it
-    was the most accurate option tested and roughly how much to trust it.
+    Returns a plain-language, business-facing explanation for why a forecast is
+    recommended. Deliberately omits both raw metric values (MAE/R²/MAPE) AND the
+    underlying algorithm's name — a retail manager doesn't need to know "Prophet" or
+    "MAE = 6.71" beat the alternatives, they need to know it was the most accurate
+    option tested and roughly how much to trust it. The technical name/numbers stay
+    available in the Advanced Technical Details table for anyone who wants them.
     """
     r2 = metrics.get("R2", 0.0)
     if r2 >= 0.5:
@@ -41,24 +42,18 @@ def get_recommendation_reason(model_name: str, metrics: dict) -> str:
         confidence_note = "though with limited historical data to learn from, treat this as a rough estimate rather than a precise prediction"
 
     if model_name == "Prophet":
-        return (
-            f"Prophet is recommended because it was the most accurate option on your historical data, "
-            f"{confidence_note}. It's especially good at picking up on repeating weekly patterns and "
-            f"adjusting for price changes and promotions."
-        )
+        trait = "picking up on repeating weekly patterns and adjusting for price changes and promotions"
     elif model_name == "Gradient Boosting":
-        return (
-            f"Gradient Boosting is recommended because it was the most accurate option on your historical data, "
-            f"{confidence_note}. It's well-suited to capturing complex, non-linear relationships between "
-            f"price, promotions, and past sales trends."
-        )
+        trait = "capturing complex, non-linear relationships between price, promotions, and past sales trends"
     elif model_name == "Ridge Regression":
-        return (
-            f"Ridge Regression is recommended because it was the most accurate option on your historical data, "
-            f"{confidence_note}. It's a simple, stable model that fits general trends without overreacting to "
-            f"noisy day-to-day swings."
-        )
-    return "Recommended because it was the most accurate option on your historical data."
+        trait = "fitting general trends without overreacting to noisy day-to-day swings"
+    else:
+        trait = "fitting the patterns found in your historical data"
+
+    return (
+        f"This forecast is recommended because it was the most accurate approach tested on your "
+        f"historical data, {confidence_note}. It's especially good at {trait}."
+    )
 
 def save_model_file(product_id: str, model_name: str, model_obj) -> tuple:
     """

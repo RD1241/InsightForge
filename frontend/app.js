@@ -2097,8 +2097,10 @@ document.addEventListener("DOMContentLoaded", () => {
         el.forecastModelSelect.innerHTML = modelOptions;
         state.activeModel = null; // defaults to best recommender
         
-        // 2. Populate recommended badge & reason
-        el.recommenderModelName.textContent = getModelFriendlyLabel(prodData.best_model);
+        // 2. Populate recommended badge & reason. Deliberately generic — the underlying
+        // algorithm name is a technical detail, not something a manager needs to see here;
+        // it's still available in the Advanced Technical Details table below.
+        el.recommenderModelName.textContent = "Best-Fit Forecast";
         
         // 3. Populate comparison table
         let compareHtml = "";
@@ -2184,9 +2186,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 data = state.baselineForecastData;
             }
             
-            // Update chart titles
+            // Update chart titles. The subtitle only names the underlying algorithm when the
+            // user deliberately opened Advanced: Override Forecasting Engine and picked one
+            // themselves — otherwise it stays generic, matching the recommendation badge above.
             el.forecastChartTitle.textContent = `${data.product_name} Demand Forecast`;
-            el.forecastChartSubtitle.textContent = `${getModelFriendlyLabel(data.model_used)} · ${data.forecast_horizon_days}-Day Horizon`;
+            const subtitleLabel = selectedModelVal === "best_recommender"
+                ? "Best-Fit Forecast"
+                : getModelFriendlyLabel(data.model_used);
+            el.forecastChartSubtitle.textContent = `${subtitleLabel} · ${data.forecast_horizon_days}-Day Horizon`;
             
             // Update recommendation reason text if it was the recommended model
             if (data.recommendation_reason) {
@@ -2307,13 +2314,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const modelData = state.trainedReport.products[productId].all_models[activeModelName];
                     if (modelData && modelData.R2) r2 = modelData.R2;
                 }
-                let reliabilityText = "Fair";
-                if (r2 >= 0.90) reliabilityText = "⭐⭐⭐⭐⭐ Excellent";
-                else if (r2 >= 0.80) reliabilityText = "⭐⭐⭐⭐☆ Very Good";
-                else if (r2 >= 0.70) reliabilityText = "⭐⭐⭐☆☆ Good";
-                else if (r2 >= 0.50) reliabilityText = "⭐⭐☆☆☆ Fair";
-                else reliabilityText = "⭐☆☆☆☆ Low";
-                document.getElementById("exec-forecast-reliability").textContent = reliabilityText;
+                document.getElementById("exec-forecast-reliability").textContent = getConfidenceLabel(r2);
 
                 // Today's Recommendation checklist (Tier 1) — plain-language summary of everything above
                 const statusLineMap = {
@@ -3088,11 +3089,13 @@ document.addEventListener("DOMContentLoaded", () => {
             let modelName = prodData.best_model;
             let mae = prodData.all_models[modelName].MAE;
             let mape = prodData.all_models[modelName].MAPE + "%";
-            
+            let r2 = prodData.all_models[modelName].R2;
+
             if (activeModel !== "best_recommender" && prodData.all_models[activeModel]) {
                 modelName = activeModel;
                 mae = prodData.all_models[activeModel].MAE;
                 mape = prodData.all_models[activeModel].MAPE + "%";
+                r2 = prodData.all_models[activeModel].R2;
             }
             
             // 1. Populate metadata
@@ -3103,8 +3106,10 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("print-stat-categories").textContent = state.datasetStats.unique_categories;
             document.getElementById("print-stat-dates").textContent = `${state.datasetStats.start_date} to ${state.datasetStats.end_date}`;
             
-            // 2. Populate product forecast stats
+            // 2. Populate product forecast stats. The manager-facing section only gets a
+            // plain confidence label; the raw model name/MAE/MAPE go to the Appendix instead.
             document.getElementById("print-product-name").textContent = `${prodData.product_name} (${productId})`;
+            document.getElementById("print-confidence").textContent = getConfidenceLabel(r2);
             document.getElementById("print-best-model").textContent = modelName;
             document.getElementById("print-mae").textContent = mae;
             document.getElementById("print-mape").textContent = mape;
@@ -3125,14 +3130,22 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             document.querySelector("#print-metrics-table tbody").innerHTML = printCompareHtml;
             
-            // 4. Populate AI Analyst summary paragraph
-            const botMessages = document.querySelectorAll(".message-bot .message-content p");
+            // 4. Populate AI Analyst summary paragraph. Counts whole message bubbles, not <p>
+            // tags — the welcome bubble alone has 2 paragraphs ("Hello! I'm your Retail
+            // Business Advisor..." / "How can I help you today?"), so a per-<p> count was
+            // always > 1 even when the user had never actually chatted, and grabbing the last
+            // <p> also silently truncated a real multi-paragraph reply to just its closing line.
+            const botMessages = document.querySelectorAll(".message-bot .message-content");
             let aiSummaryHtml = "";
             if (botMessages.length > 1) {
                 // Get the last bot message content (skipping welcome)
                 aiSummaryHtml = botMessages[botMessages.length - 1].innerHTML;
             } else {
-                aiSummaryHtml = renderMarkdownSafely(prodData.recommendation_reason || "No custom audit logs generated yet.");
+                // prodData (from the training report) never carries recommendation_reason — only
+                // the per-request /api/forecast/predict response does, cached in state.forecastData.
+                aiSummaryHtml = renderMarkdownSafely(
+                    (state.forecastData && state.forecastData.recommendation_reason) || "No custom audit logs generated yet."
+                );
             }
             document.getElementById("print-ai-summary").innerHTML = aiSummaryHtml;
             
@@ -3178,7 +3191,20 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Map model names to clear, business-friendly engine titles
+    // Plain-language reliability tier from R² — shared by the Business Overview stat and
+    // the exported report's confidence line, so both surfaces agree on the same thresholds.
+    function getConfidenceLabel(r2) {
+        if (r2 >= 0.90) return "⭐⭐⭐⭐⭐ Excellent";
+        if (r2 >= 0.80) return "⭐⭐⭐⭐☆ Very Good";
+        if (r2 >= 0.70) return "⭐⭐⭐☆☆ Good";
+        if (r2 >= 0.50) return "⭐⭐☆☆☆ Fair";
+        return "⭐☆☆☆☆ Low";
+    }
+
+    // Map model names to clear, business-friendly engine titles. Only used inside the
+    // Advanced/opt-in technical surfaces (override dropdown, technical metrics table) —
+    // the always-visible recommendation badge and chart subtitle intentionally never
+    // name the underlying algorithm.
     function getModelFriendlyLabel(modelName, isRecommended = false) {
         const recommendedPrefix = isRecommended ? "★ " : "";
         if (modelName === "Prophet") {
