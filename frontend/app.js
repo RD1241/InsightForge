@@ -108,9 +108,40 @@ document.addEventListener("DOMContentLoaded", () => {
         escaped = escaped.replace(/`(.*?)`/g, '<code>$1</code>');
         // Convert markdown links: [text](url) -> <a href="$2" target="_blank" rel="noopener noreferrer">$1</a>
         escaped = escaped.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-        // Convert newlines to <br>
-        escaped = escaped.replace(/\n/g, '<br>');
-        return escaped;
+
+        // Headings (#/##/###) and bullet/numbered lists (Phase 4) — line-based constructs,
+        // handled here (before the plain-text newline pass) so consecutive list items land
+        // inside one <ul>/<ol> instead of being separated by <br>. Operates on `escaped`,
+        // which was HTML-escaped first and only ever gains trusted static tags after that —
+        // capturing substrings here can't reintroduce unescaped user content.
+        const lines = escaped.split('\n');
+        const htmlParts = [];
+        let listType = null; // 'ul' | 'ol' | null — which list we're currently inside
+        const closeList = () => {
+            if (listType) { htmlParts.push(`</${listType}>`); listType = null; }
+        };
+        lines.forEach(line => {
+            const headingMatch = line.match(/^(#{1,3})\s+(.*)$/);
+            const bulletMatch = line.match(/^[-*]\s+(.*)$/);
+            const numberedMatch = line.match(/^\d+\.\s+(.*)$/);
+
+            if (headingMatch) {
+                closeList();
+                htmlParts.push(`<strong class="chat-heading chat-heading-${headingMatch[1].length}">${headingMatch[2]}</strong><br>`);
+            } else if (bulletMatch) {
+                if (listType !== 'ul') { closeList(); htmlParts.push('<ul>'); listType = 'ul'; }
+                htmlParts.push(`<li>${bulletMatch[1]}</li>`);
+            } else if (numberedMatch) {
+                if (listType !== 'ol') { closeList(); htmlParts.push('<ol>'); listType = 'ol'; }
+                htmlParts.push(`<li>${numberedMatch[1]}</li>`);
+            } else {
+                closeList();
+                htmlParts.push(line + '<br>');
+            }
+        });
+        closeList();
+
+        return htmlParts.join('').replace(/<br>$/, '');
     }
 
     // --- Toast Notification helper ---
@@ -281,6 +312,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Chat Panel
         chatPanel: document.getElementById("chat-panel"),
+        chatResizeHandle: document.getElementById("chat-resize-handle"),
         openChatBtn: document.getElementById("open-chat-btn"),
         closeChatBtn: document.getElementById("close-chat-btn"),
         chatMessages: document.getElementById("chat-messages"),
@@ -2459,6 +2491,48 @@ document.addEventListener("DOMContentLoaded", () => {
     el.openChatBtn.addEventListener("click", () => toggleChat(!state.chatOpen));
     el.closeChatBtn.addEventListener("click", () => toggleChat(false));
 
+    // --- Chat Panel Resize (Phase 4) ---
+    // The panel is right-anchored (right:0 while open), so dragging the handle left
+    // increases width: new width = distance from the drag position to the right edge
+    // of the viewport. Persisted per-browser as a UI preference only — not dataset
+    // state, so it doesn't interact with the fresh-session dataset-clear logic.
+    const CHAT_WIDTH_KEY = "insightforge_chat_width";
+    (function initChatResize() {
+        const root = document.documentElement;
+        const minWidth = parseInt(getComputedStyle(root).getPropertyValue("--chat-width-min")) || 380;
+        const maxWidth = parseInt(getComputedStyle(root).getPropertyValue("--chat-width-max")) || 720;
+
+        const savedWidth = parseInt(localStorage.getItem(CHAT_WIDTH_KEY));
+        if (savedWidth && savedWidth >= minWidth && savedWidth <= maxWidth) {
+            root.style.setProperty("--chat-width", `${savedWidth}px`);
+        }
+
+        if (!el.chatResizeHandle) return;
+        let dragging = false;
+
+        el.chatResizeHandle.addEventListener("pointerdown", (e) => {
+            dragging = true;
+            el.chatResizeHandle.classList.add("dragging");
+            el.chatResizeHandle.setPointerCapture(e.pointerId);
+        });
+
+        el.chatResizeHandle.addEventListener("pointermove", (e) => {
+            if (!dragging) return;
+            const newWidth = Math.min(maxWidth, Math.max(minWidth, window.innerWidth - e.clientX));
+            root.style.setProperty("--chat-width", `${newWidth}px`);
+        });
+
+        const endDrag = (e) => {
+            if (!dragging) return;
+            dragging = false;
+            el.chatResizeHandle.classList.remove("dragging");
+            const currentWidth = parseInt(getComputedStyle(root).getPropertyValue("--chat-width"));
+            localStorage.setItem(CHAT_WIDTH_KEY, currentWidth);
+        };
+        el.chatResizeHandle.addEventListener("pointerup", endDrag);
+        el.chatResizeHandle.addEventListener("pointercancel", endDrag);
+    })();
+
     // Handle suggestion tags trigger
     const suggestions = document.querySelectorAll(".suggestion-tag");
     suggestions.forEach(tag => {
@@ -2762,9 +2836,9 @@ document.addEventListener("DOMContentLoaded", () => {
         for (let i = 1; i <= 30; i++) {
             const isChecked = state.simulator.promoDays.includes(i);
             const checkboxHtml = `
-                <div class="flex-col align-center justify-center" style="border: 1px solid rgba(255,255,255,0.03); background: rgba(255,255,255,0.01); border-radius: 4px; padding: 4px;">
-                    <span style="font-size: 0.55rem; color: var(--text-secondary); margin-bottom: 2px;">D${i}</span>
-                    <input type="checkbox" class="sim-day-checkbox" data-day="${i}" ${isChecked ? 'checked' : ''} style="width: 13px; height: 13px; accent-color: var(--accent); cursor: pointer;">
+                <div class="sim-day-cell">
+                    <span>D${i}</span>
+                    <input type="checkbox" class="sim-day-checkbox" data-day="${i}" ${isChecked ? 'checked' : ''}>
                 </div>
             `;
             el.simPromoDaysGrid.insertAdjacentHTML("beforeend", checkboxHtml);

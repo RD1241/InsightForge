@@ -27,11 +27,29 @@
     
     --font-heading: 'Outfit', sans-serif;
     --font-body: 'Inter', sans-serif;
-    
+
     --sidebar-width: 260px;
-    --chat-width: 380px;
+    --chat-width: 440px;
+    --chat-width-min: 380px;
+    --chat-width-max: 720px;
     --header-height: 70px;
     --transition-speed: 0.3s;
+
+    /* Spacing scale (Phase 4) — a consistent step used in place of one-off px margins/
+       paddings/gaps on pages touched by this redesign. Not retrofitted sitewide. */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+
+    /* Radius scale (Phase 4) — .card/.btn/.badge etc previously hardcoded 4px/6px/8px/
+       12px inconsistently; new/touched components use these named steps instead. */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
 }
 
 /* Reset and Globals */
@@ -376,6 +394,12 @@ a {
     transition: all var(--transition-speed) ease;
 }
 
+/* .btn is also used on <a> tags (e.g. the CSV template download link) — anchors need
+   the underline explicitly suppressed since .btn itself doesn't reset it. */
+a.btn {
+    text-decoration: none;
+}
+
 .btn:hover {
     background-color: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.2);
@@ -636,7 +660,25 @@ a {
 }
 
 .chat-panel.open {
-    right: 0;
+    right: 0 !important;
+}
+
+/* Drag handle on the panel's left edge — the panel is right-anchored, so dragging it
+   left increases width. Width itself has no transition (only `right` does, and that's
+   a fixed 0 while .open), so live-updating --chat-width during a drag doesn't lag. */
+.chat-resize-handle {
+    position: absolute;
+    top: 0;
+    left: -3px;
+    width: 6px;
+    height: 100%;
+    cursor: ew-resize;
+    z-index: 51;
+}
+.chat-resize-handle:hover,
+.chat-resize-handle.dragging {
+    background: var(--accent);
+    opacity: 0.4;
 }
 
 .chat-panel-header {
@@ -1522,6 +1564,27 @@ a {
     grid-template-columns: repeat(6, 1fr);
     gap: 1rem;
 }
+
+/* Executive Summary Board — a more compact stat-box variant than the default
+   (smaller value text, centered, fixed min-height) so six tiles fit one row.
+   Was previously six copies of the same inline style block per box (Phase 4 cleanup). */
+.grid-6 .stat-box {
+    padding: var(--space-4) var(--space-2);
+    align-items: center;
+    justify-content: center;
+    min-height: 90px;
+    gap: var(--space-1);
+}
+.grid-6 .stat-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.8;
+    font-weight: 600;
+}
+.grid-6 .stat-value {
+    font-size: 1.15rem;
+}
 @media (max-width: 1024px) {
     .grid-6 {
         grid-template-columns: repeat(3, 1fr) !important;
@@ -1800,6 +1863,103 @@ a {
     background: rgba(244, 63, 94, 0.1);
 }
 
+/* What-If Simulator — larger controls, same functionality (Phase 4). Native
+   <input type="range"> needs vendor-prefixed pseudo-elements to size the thumb
+   consistently; .form-range/.grid-10 previously existed only as inline styles. */
+.form-range {
+    width: 100%;
+    height: 8px;
+    border-radius: var(--radius-sm);
+    accent-color: var(--accent);
+    background: rgba(255, 255, 255, 0.1);
+    outline: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.form-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid var(--bg-main);
+    box-shadow: 0 0 0 1px var(--accent);
+    cursor: pointer;
+    transition: transform var(--transition-speed) ease;
+}
+.form-range::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+.form-range::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid var(--bg-main);
+    box-shadow: 0 0 0 1px var(--accent);
+    cursor: pointer;
+    transition: transform var(--transition-speed) ease;
+}
+.form-range::-moz-range-thumb:hover {
+    transform: scale(1.15);
+}
+
+.grid-10 {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+}
+
+/* Promotion day checkboxes — was 13x13px with 0.55rem labels, generated in
+   renderPromoCalendarGrid() (app.js). Larger touch targets, same functionality. */
+.sim-day-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2);
+}
+.sim-day-cell span {
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+}
+.sim-day-cell input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* Card-section divider — for cards merged into two labeled sections (Phase 4),
+   e.g. the Forecast page's AI Recommendation + "What should you do next?" card. */
+.card-section-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: var(--space-2) 0;
+}
+
+/* Small inset content panel used for secondary details inside a card body — was three
+   copies of the same inline style block with only the opacity/padding varying (Phase 4
+   cleanup). Default is the slightly more prominent variant; -sm is for the smaller
+   side-by-side metric tiles. */
+.inset-panel {
+    background: rgba(255, 255, 255, 0.02);
+    padding: var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.inset-panel-sm {
+    background: rgba(255, 255, 255, 0.01);
+    padding: var(--space-2) 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
 /* Pre-Training AI Preview card (Phase 3) */
 .pretrain-card {
     border-left: 3px solid var(--accent);
@@ -1812,6 +1972,26 @@ a {
     letter-spacing: 0.03em;
     color: var(--accent-light);
 }
+
+/* Markdown lists/headings inside chat messages (Phase 4 — renderMarkdownSafely()) */
+.message-content ul,
+.message-content ol {
+    margin: var(--space-1) 0 var(--space-2) var(--space-4);
+    padding: 0;
+}
+.message-content li {
+    margin-bottom: var(--space-1);
+    line-height: 1.4;
+}
+.chat-heading {
+    display: block;
+    font-family: var(--font-heading);
+    color: var(--text-primary);
+    margin-top: var(--space-2);
+}
+.chat-heading-1 { font-size: 1rem; }
+.chat-heading-2 { font-size: 0.92rem; }
+.chat-heading-3 { font-size: 0.85rem; }
 
 /* AI-generated chart embedded in a chat message bubble (Phase 2) */
 .chat-chart-container {

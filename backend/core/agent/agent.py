@@ -217,6 +217,7 @@ RULES:
 5. When explaining metrics (like MAE, MAPE, R²), reference the 'human_friendly_explanation' template in the context to explain what they mean in simple business terms.
 6. If the structured context indicates an error or no active dataset, politely tell the user to upload a dataset or load the demo.
 7. If the context's metric_type is "chart_spec", a chart is already being rendered separately in the UI — write only a short (1-2 sentence) caption highlighting the standout value(s), do not restate every number from the chart.
+8. Default to plain business language, not ML/statistics jargon — say "how far off predictions typically are" rather than "MAE", "how much of the demand pattern the model explains" rather than "R²", unless the user's own question uses that technical term or specifically asks how the model works. You are talking to a retail manager making a decision, not a data scientist.
 """
     
     # Formulate prompt messages
