@@ -43,6 +43,29 @@ def read_csv_robust(path: str) -> pd.DataFrame:
     except UnicodeDecodeError:
         return pd.read_csv(path, encoding="cp1252")
 
+def _looks_like_excel(path: str) -> bool:
+    """
+    Detects Excel content by magic bytes rather than trusting the filename extension —
+    confirmed necessary via a real user upload named "*.csv" that was actually a genuine
+    .xlsx file (Excel's own "Save As" can produce this if the format wasn't changed from
+    the default, or a file gets renamed by hand). .xlsx/.xlsm are ZIP archives
+    (PK\\x03\\x04 signature); legacy .xls is an OLE2 compound file (D0 CF 11 E0).
+    """
+    with open(path, "rb") as f:
+        header = f.read(8)
+    return header.startswith(b"PK\x03\x04") or header.startswith(b"\xd0\xcf\x11\xe0")
+
+def read_tabular_upload(path: str) -> pd.DataFrame:
+    """
+    Reads an uploaded file as a DataFrame, auto-detecting real Excel content (see
+    _looks_like_excel) before falling back to the CSV encoding chain — so a file that's
+    named .csv but is actually .xlsx still loads correctly instead of failing with a
+    confusing UnicodeDecodeError.
+    """
+    if _looks_like_excel(path):
+        return pd.read_excel(path)
+    return read_csv_robust(path)
+
 def get_active_df() -> pd.DataFrame:
     """
     Returns the active dataset in-memory cache, loading it from disk if not cached.
@@ -85,8 +108,8 @@ async def upload_dataset(file: UploadFile = File(...)):
     global _cached_status
     clear_status_cache()  # Clear cache on new upload (HIGH-11)
     
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="Only CSV files are supported.")
+    if not file.filename.lower().endswith(('.csv', '.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only CSV or Excel (.xlsx/.xls) files are supported.")
         
     # Enforce file size limit of 50 MB
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
@@ -107,15 +130,19 @@ async def upload_dataset(file: UploadFile = File(...)):
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # Load and validate
-        df = read_csv_robust(temp_path)
+        # Load and validate — auto-detects real Excel content regardless of the
+        # filename's extension (see read_tabular_upload / _looks_like_excel).
+        df = read_tabular_upload(temp_path)
         report = validate_dataset(df)
-        
+
         if report["is_valid"]:
-            # Move temp file to active dataset path
-            if os.path.exists(ACTIVE_DATASET_PATH):
-                os.remove(ACTIVE_DATASET_PATH)
-            shutil.move(temp_path, ACTIVE_DATASET_PATH)
+            # Write the PARSED data back out as genuine CSV text, rather than moving the
+            # original upload bytes as-is — normalizes storage to one known format
+            # regardless of whether the input was CSV or Excel, so every downstream
+            # reader (get_active_df, etc.) never needs its own format detection.
+            df.to_csv(ACTIVE_DATASET_PATH, index=False)
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
             
             # Cache the status results to speed up UI transitions
             stats = report["stats"]
@@ -160,7 +187,7 @@ async def upload_dataset(file: UploadFile = File(...)):
                 "message": "Dataset validation failed due to file parsing error.",
                 "report": {
                     "is_valid": False,
-                    "errors": ["Failed to read CSV file. Please make sure it is a valid CSV format."],
+                    "errors": ["Failed to read the file. Please make sure it's a valid CSV or Excel (.xlsx) file, not corrupted or password-protected."],
                     "warnings": [],
                     "stats": {}
                 }

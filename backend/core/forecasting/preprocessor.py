@@ -129,14 +129,15 @@ def standardize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         df_std['units_sold'] = pd.to_numeric(df_std['units_sold'], errors='coerce').fillna(0.0)
 
     # Map a real price column to 'price' before falling back to synthetic pricing below.
-    # 'selling_price' (actual price charged, post-discount) is preferred over 'base_price'
-    # since it's what revenue is actually computed from; only datasets with neither column
-    # fall through to the hash-based synthetic price further down.
+    # Checked in order of preference: 'selling_price' (actual price charged, post-discount)
+    # first since it's what revenue is actually computed from, then 'unit_price' (common in
+    # POS/retail exports — confirmed via a real user upload), then 'base_price'. Only
+    # datasets with none of these fall through to the hash-based synthetic price further down.
     if 'price' not in df_std.columns:
-        if 'selling_price' in df_std.columns:
-            df_std = df_std.rename(columns={'selling_price': 'price'})
-        elif 'base_price' in df_std.columns:
-            df_std = df_std.rename(columns={'base_price': 'price'})
+        for price_col in ('selling_price', 'unit_price', 'base_price'):
+            if price_col in df_std.columns:
+                df_std = df_std.rename(columns={price_col: 'price'})
+                break
 
     # 2. Enrich Missing Columns from Catalog
     unique_products = df_std['product_id'].unique() if 'product_id' in df_std.columns else []
