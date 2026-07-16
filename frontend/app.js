@@ -2299,14 +2299,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     const modelData = state.trainedReport.products[productId].all_models[activeModelName];
                     if (modelData && modelData.MAPE) mape = modelData.MAPE;
                 }
-                const accuracyPct = `${(100 - mape).toFixed(1)}%`;
+                // Qualitative label only ("Poor"/"Good"/"Excellent") — the raw percentage
+                // was dropped from this tile so it stays fully jargon-free for a manager.
                 const accuracyRating = METRICS_EXPLAINER.MAPE.ratingFn(mape);
                 document.getElementById("exec-prediction-accuracy").textContent = accuracyRating.text.split(" (")[0];
-                const accuracyDetailEl = document.getElementById("exec-prediction-accuracy-detail");
-                if (accuracyDetailEl) {
-                    accuracyDetailEl.textContent = `${accuracyPct} accuracy`;
-                    accuracyDetailEl.className = `rating-badge ${accuracyRating.class} mt-1`;
-                }
 
                 // G. Forecast Reliability (R2 derived)
                 let r2 = (data.metrics && data.metrics.R2) ? data.metrics.R2 : 0;
