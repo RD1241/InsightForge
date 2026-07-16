@@ -28,6 +28,21 @@ _cached_status = None
 _cached_df = None
 _cached_eda = None
 
+def read_csv_robust(path: str) -> pd.DataFrame:
+    """
+    Reads a CSV trying a small chain of encodings. Real-world CSV exports — especially
+    from Excel on Windows — are very often NOT plain UTF-8: a UTF-8 byte-order mark, or
+    the Windows-1252 codepage (triggered by currency symbols like Rs. or other special
+    characters), are both common and were previously an unhandled UnicodeDecodeError.
+    'utf-8-sig' transparently covers plain UTF-8 as well as UTF-8-with-BOM. cp1252 is a
+    safe last resort — as a single-byte encoding it can decode any byte sequence without
+    raising, so this chain always succeeds if the file is readable at all.
+    """
+    try:
+        return pd.read_csv(path, encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        return pd.read_csv(path, encoding="cp1252")
+
 def get_active_df() -> pd.DataFrame:
     """
     Returns the active dataset in-memory cache, loading it from disk if not cached.
@@ -36,7 +51,7 @@ def get_active_df() -> pd.DataFrame:
     if _cached_df is None:
         if not os.path.exists(ACTIVE_DATASET_PATH):
             raise FileNotFoundError("No active dataset found.")
-        _cached_df = pd.read_csv(ACTIVE_DATASET_PATH)
+        _cached_df = read_csv_robust(ACTIVE_DATASET_PATH)
     return _cached_df
 
 _cached_clean_df = None
@@ -93,7 +108,7 @@ async def upload_dataset(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
             
         # Load and validate
-        df = pd.read_csv(temp_path)
+        df = read_csv_robust(temp_path)
         report = validate_dataset(df)
         
         if report["is_valid"]:
