@@ -572,7 +572,7 @@
                         <!-- TIER 1: Today's Recommendation — the conclusion, read this first -->
                         <div>
                             <div class="tier-label"><i data-lucide="target" style="width:12px;height:12px;"></i>Today's Recommendation</div>
-                            <div class="card glassmorphic border-pulse" id="exec-recommendation-banner" style="background: rgba(16, 185, 129, 0.03); border: 1.5px solid rgba(16, 185, 129, 0.2); padding: 1.25rem;">
+                            <div class="card glassmorphic border-pulse" id="exec-recommendation-banner">
                                 <div class="flex-row justify-between align-start wrap gap-4">
                                     <ul id="todays-recommendation-list" style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:0.5rem; font-size:0.85rem; color: var(--text-primary);">
                                         <li>Select a product to see today's recommendation...</li>
@@ -594,7 +594,7 @@
                                 <span class="stat-value text-primary mt-2 block" id="exec-demand-outlook">-</span>
                             </div>
                             <!-- 2. Projected Revenue -->
-                            <div class="stat-box card glassmorphic text-center">
+                            <div class="stat-box card glassmorphic text-center stat-tile-revenue">
                                 <span class="stat-label">Projected Revenue</span>
                                 <span class="stat-value text-primary mt-2 block" id="exec-projected-revenue">-</span>
                             </div>
@@ -604,7 +604,7 @@
                                 <span class="stat-value mt-2 block" id="exec-inventory-status">-</span>
                             </div>
                             <!-- 4. Potential Revenue Loss -->
-                            <div class="stat-box card glassmorphic text-center">
+                            <div class="stat-box card glassmorphic text-center stat-tile-risk">
                                 <span class="stat-label">Lost Revenue Risk</span>
                                 <span class="stat-value mt-2 block" id="exec-revenue-loss">-</span>
                             </div>

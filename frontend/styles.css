@@ -605,7 +605,16 @@ a.btn {
 
 .border-pulse {
     border: 1px solid rgba(16, 185, 129, 0.25);
+    background: rgba(16, 185, 129, 0.025);
     box-shadow: 0 0 16px rgba(16, 185, 129, 0.05);
+    animation: glow-breathe 4s ease-in-out infinite;
+}
+
+/* A slow, subtle "breathing" glow — not the fast ripple .badge-pulse uses, since these
+   cards hold text meant to be read, not glanced at and dismissed. */
+@keyframes glow-breathe {
+    0%, 100% { box-shadow: 0 0 16px rgba(16, 185, 129, 0.05); }
+    50% { box-shadow: 0 0 28px rgba(16, 185, 129, 0.13); }
 }
 
 .bullets-list {
@@ -1584,12 +1593,35 @@ a.btn {
    (smaller value text, centered, fixed min-height) so the tiles fit one row.
    Was previously six copies of the same inline style block per box (Phase 4 cleanup). */
 .grid-5 .stat-box {
+    position: relative;
+    overflow: hidden;
     padding: var(--space-4) var(--space-2);
     align-items: center;
     justify-content: center;
     min-height: 90px;
     gap: var(--space-1);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
+
+/* A colored top-accent gives each tile a category identity at a glance, and a gentle
+   hover lift replaces what was a flat, static grid. Only the two tiles with a genuine
+   positive/negative connotation (revenue, risk) get their own hue — the rest stay
+   neutral, so the row doesn't turn into an arbitrary rainbow of five different colors. */
+.grid-5 .stat-box::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--tile-accent, var(--accent));
+    opacity: 0.85;
+}
+.grid-5 .stat-box:hover {
+    transform: translateY(-3px);
+    border-color: var(--tile-accent, var(--border-hover));
+    box-shadow: 0 10px 24px -10px var(--tile-glow, var(--accent-glow));
+}
+.stat-tile-revenue { --tile-accent: var(--success); --tile-glow: var(--success-glow); }
+.stat-tile-risk { --tile-accent: var(--warning); --tile-glow: var(--warning-glow); }
 .grid-5 .stat-label {
     font-size: 0.68rem;
     text-transform: uppercase;
