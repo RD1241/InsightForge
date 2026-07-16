@@ -106,7 +106,7 @@ AVAILABLE BACKEND TOOLS:
 10. `generate_business_insights()`: Use when asked for business advice, slow-moving items, general recommendations, or business insights.
 11. `generate_chart_spec(chart_type, metric, dimension, product_names, categories, recent_days, limit)`: PREFER THIS TOOL whenever the phrasing implies a visual — "show", "plot", "chart", "graph", "visualize", "compare X and Y [sales/revenue]", or names a chart type like "pie chart"/"bar chart". This takes priority over tools 2/5/6 when both could apply. Examples: "show me a chart of...", "plot revenue by category", "compare Milk and Bread sales", "pie chart of category revenue", "show top 10 products", "show revenue for the last 3 months". Arguments:
     - chart_type: one of "bar", "line", "donut", "area" (default "bar"; a "pie chart" request means "donut")
-    - metric: one of "units_sold", "revenue", "stock" (default "units_sold")
+    - metric: one of "units_sold", "revenue", "stock", "profit" (default "units_sold"; "profit and loss"/"profit margin" requests mean "profit")
     - dimension: one of "product", "category", "date", "day_of_week", "month" (default "category") — what the chart is broken down BY
     - product_names: array of product names/references mentioned by the user, e.g. ["Milk", "Bread"] — empty array if none mentioned
     - categories: array of category names mentioned by the user — empty array if none mentioned

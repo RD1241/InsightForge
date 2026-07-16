@@ -313,6 +313,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Chat Panel
         chatPanel: document.getElementById("chat-panel"),
         chatResizeHandle: document.getElementById("chat-resize-handle"),
+        maximizeChatBtn: document.getElementById("maximize-chat-btn"),
         openChatBtn: document.getElementById("open-chat-btn"),
         closeChatBtn: document.getElementById("close-chat-btn"),
         chatMessages: document.getElementById("chat-messages"),
@@ -2531,6 +2532,35 @@ document.addEventListener("DOMContentLoaded", () => {
         };
         el.chatResizeHandle.addEventListener("pointerup", endDrag);
         el.chatResizeHandle.addEventListener("pointercancel", endDrag);
+    })();
+
+    // Maximize/restore toggle — the drag handle alone turned out not to be discoverable
+    // enough (reported directly by a user testing it), so this gives the same resize
+    // capability a visible, one-click control. Session-only (not persisted like the
+    // drag-resize width) — maximizing is a transient "focus mode", not a standing
+    // preference like the width someone deliberately drags to.
+    (function initChatMaximize() {
+        if (!el.maximizeChatBtn) return;
+        const root = document.documentElement;
+        const maxWidth = parseInt(getComputedStyle(root).getPropertyValue("--chat-width-max")) || 720;
+        let isMaximized = false;
+        let widthBeforeMaximize = null;
+
+        el.maximizeChatBtn.addEventListener("click", () => {
+            isMaximized = !isMaximized;
+            if (isMaximized) {
+                widthBeforeMaximize = getComputedStyle(root).getPropertyValue("--chat-width").trim();
+                const target = Math.min(maxWidth, Math.round(window.innerWidth * 0.9));
+                root.style.setProperty("--chat-width", `${target}px`);
+                el.maximizeChatBtn.innerHTML = '<i data-lucide="minimize-2"></i>';
+                el.maximizeChatBtn.title = "Restore chat window size";
+            } else {
+                root.style.setProperty("--chat-width", widthBeforeMaximize || `${maxWidth}px`);
+                el.maximizeChatBtn.innerHTML = '<i data-lucide="maximize-2"></i>';
+                el.maximizeChatBtn.title = "Maximize chat window";
+            }
+            lucide.createIcons();
+        });
     })();
 
     // Handle suggestion tags trigger

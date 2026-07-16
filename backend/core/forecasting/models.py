@@ -177,8 +177,25 @@ class ProphetModel(BaseForecaster):
         self.train_price_min = float(prophet_df['price'].min())
         self.train_price_max = float(prophet_df['price'].max())
 
+        # Only fit yearly seasonality if there's at least a full year of training
+        # history. Forcing it on (the old hardcoded True) makes Prophet fit a yearly
+        # cycle it has never actually observed on a short dataset — confirmed directly:
+        # on an 89-day real user upload, one product's validation R2 went from -1312
+        # (forced True) to -0.09 (disabled) from this switch alone.
+        #
+        # Prophet's own yearly_seasonality='auto' isn't a safe substitute here — it
+        # requires >=730 days (2 full years) before enabling it, which is calibrated
+        # for long production time series, not this app's realistic dataset sizes. The
+        # demo dataset (699 days) has real, learnable yearly seasonality: forcing it on
+        # scores R2=0.93; 'auto' disables it (span < 730) and drops to R2=0.48. A
+        # self-computed 365-day (one full cycle observed) threshold gets both cases
+        # right — verified directly against both the demo dataset and a real 89-day
+        # user upload.
+        train_span_days = (train_df['date'].max() - train_df['date'].min()).days
+        use_yearly_seasonality = train_span_days >= 365
+
         self.model = Prophet(
-            yearly_seasonality=True,
+            yearly_seasonality=use_yearly_seasonality,
             weekly_seasonality=True,
             daily_seasonality=False,
             interval_width=0.95  # 95% confidence interval

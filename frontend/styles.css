@@ -690,6 +690,12 @@ a.btn {
     padding: 0 1.25rem;
 }
 
+.chat-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
 .chat-header-title {
     display: flex;
     align-items: center;

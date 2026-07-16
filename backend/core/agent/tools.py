@@ -451,7 +451,7 @@ def model_comparison(product_id: str) -> dict:
     }
 
 CHART_TYPES = {"bar", "line", "donut", "area"}
-CHART_METRICS = {"units_sold", "revenue", "stock"}
+CHART_METRICS = {"units_sold", "revenue", "stock", "profit"}
 CHART_DIMENSIONS = {"product", "category", "date", "day_of_week", "month"}
 _MONTH_LABELS = {1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
                  7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'}
@@ -512,7 +512,24 @@ def generate_chart_spec(
 
     df = df.copy()
     df['revenue'] = df['units_sold'] * df['price']
-    value_col = {"revenue": "revenue", "stock": "stock_on_hand"}.get(metric, "units_sold")
+    if metric == "profit":
+        # Prefer a real 'profit' column from the source dataset if present (respects
+        # whatever calculation the user's own data used) over deriving one — only
+        # falls back to revenue - cost when the dataset actually has cost data.
+        if 'profit' in df.columns:
+            pass  # already a real column, nothing to compute
+        elif 'cost_price' in df.columns:
+            df['profit'] = df['revenue'] - (df['units_sold'] * df['cost_price'])
+        else:
+            return {"status": "error", "message": "This dataset doesn't include cost or profit data, so a profit/loss chart isn't possible — try revenue instead."}
+    value_col = {"revenue": "revenue", "stock": "stock_on_hand", "profit": "profit"}.get(metric, "units_sold")
+
+    # A donut/pie reads as part-of-a-whole composition across a handful of categories —
+    # it breaks down for a date series (e.g. 30 daily slices is unreadable), regardless
+    # of literally what the user asked for ("pie chart of profit over the last 30 days").
+    # Line reads correctly as a trend over time and is the closer match to their intent.
+    if dimension == 'date' and chart_type == 'donut':
+        chart_type = 'line'
 
     if dimension == 'product':
         grouped = df.groupby('product_name')[value_col].sum().sort_values(ascending=False).head(limit)
@@ -527,7 +544,7 @@ def generate_chart_spec(
     else:  # category
         grouped = df.groupby('category')[value_col].sum().sort_values(ascending=False)
 
-    metric_label = {"revenue": "Revenue (₹)", "stock": "Stock on Hand"}.get(metric, "Units Sold")
+    metric_label = {"revenue": "Revenue (₹)", "stock": "Stock on Hand", "profit": "Profit (₹)"}.get(metric, "Units Sold")
     title = f"{metric_label} by {dimension.replace('_', ' ').title()}"
 
     return {

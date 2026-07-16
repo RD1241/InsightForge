@@ -26,30 +26,39 @@ _registry_lock = threading.Lock()
 
 def get_recommendation_reason(model_name: str, metrics: dict) -> str:
     """
-    Returns an evidence-based explanation for why a specific model is recommended.
+    Returns a plain-language, business-facing explanation for why a specific model is
+    recommended. Deliberately omits raw metric values (MAE/R²/MAPE) — those are for
+    technical reference and stay in the Advanced Technical Details table; a retail
+    manager doesn't need "MAE = 6.71" to trust a recommendation, they need to know it
+    was the most accurate option tested and roughly how much to trust it.
     """
-    mae = metrics.get("MAE", 0.0)
     r2 = metrics.get("R2", 0.0)
-    
+    if r2 >= 0.5:
+        confidence_note = "and its predictions closely track your actual historical sales"
+    elif r2 >= 0:
+        confidence_note = "though with a moderate margin of error given the data available — treat it as a solid starting estimate"
+    else:
+        confidence_note = "though with limited historical data to learn from, treat this as a rough estimate rather than a precise prediction"
+
     if model_name == "Prophet":
         return (
-            f"Prophet is recommended because it achieved the lowest Mean Absolute Error (MAE = {mae}) "
-            f"on the chronological validation set. Prophet is highly transparent and excels at decomposing "
-            f"yearly and weekly seasonal patterns while adjusting for price and promotional surges."
+            f"Prophet is recommended because it was the most accurate option on your historical data, "
+            f"{confidence_note}. It's especially good at picking up on repeating weekly patterns and "
+            f"adjusting for price changes and promotions."
         )
     elif model_name == "Gradient Boosting":
         return (
-            f"Gradient Boosting is recommended due to its superior validation metrics (MAE = {mae}, R² = {r2}). "
-            f"The boosted ensemble of decision trees successfully captured complex, non-linear relationships and "
-            f"interactions between prices, promotion flags, and historical lag trends."
+            f"Gradient Boosting is recommended because it was the most accurate option on your historical data, "
+            f"{confidence_note}. It's well-suited to capturing complex, non-linear relationships between "
+            f"price, promotions, and past sales trends."
         )
     elif model_name == "Ridge Regression":
         return (
-            f"Ridge Regression is recommended as it offered the lowest validation error (MAE = {mae}) "
-            f"during testing. It provides a simple, regularized baseline that fits linear trends effectively "
-            f"without risk of overfitting on noisy retail sales data."
+            f"Ridge Regression is recommended because it was the most accurate option on your historical data, "
+            f"{confidence_note}. It's a simple, stable model that fits general trends without overreacting to "
+            f"noisy day-to-day swings."
         )
-    return f"Recommended based on lowest MAE on the validation set."
+    return "Recommended because it was the most accurate option on your historical data."
 
 def save_model_file(product_id: str, model_name: str, model_obj) -> tuple:
     """
