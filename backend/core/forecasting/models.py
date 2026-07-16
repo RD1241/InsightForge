@@ -7,6 +7,15 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
+# Single source of truth for how far a What-If price scenario is allowed to move from the
+# historical average — referenced by the API layer (routers/forecasting.py, validates the
+# incoming price_multiplier), the recursive forecast loop (train_pipeline.py, clamps the
+# multiplier before computing avg_price), and ProphetModel.predict()'s own regressor clip
+# below. All three used to hardcode 0.7/1.3 independently; a change to one without the
+# others silently reintroduces the "What-If slider does nothing" bug at a new threshold.
+PRICE_SCENARIO_MULTIPLIER_MIN = 0.7
+PRICE_SCENARIO_MULTIPLIER_MAX = 1.3
+
 # Graceful import of Prophet
 PROPHET_AVAILABLE = False
 try:
@@ -211,19 +220,31 @@ class ProphetModel(BaseForecaster):
 
         prophet_df = df[['date', 'price', 'promotion_flag']].rename(columns={'date': 'ds'})
 
-        # Clip the price regressor to the range Prophet actually trained on.
-        # Prophet's price coefficient is fit against whatever variance the training
+        # Clip the price regressor to a margin around the range Prophet actually trained
+        # on. Prophet's price coefficient is fit against whatever variance the training
         # window happened to contain — for products with a near-constant historical
-        # price, that coefficient is poorly identified, and feeding a serve-time price
-        # outside that narrow range causes the additive model to extrapolate the trend
-        # term catastrophically (observed: correct-looking forecasts collapsing to a
-        # large negative yhat, clipped to a flat 0 by the max(0, ...) below). Clamping
-        # keeps every prediction inside the space Prophet was actually validated on.
+        # price, that coefficient is poorly identified, and feeding a serve-time price far
+        # outside that range causes the additive model to extrapolate the trend term
+        # catastrophically (observed: correct-looking forecasts collapsing to a large
+        # negative yhat, clipped to a flat 0 by the max(0, ...) below).
+        #
+        # The margin matters: clipping to the *exact* historical min/max (no slack) made
+        # the What-If price slider a no-op for any product whose historical price barely
+        # varied (common for fixed-MRP retail items) — every requested scenario price got
+        # clamped straight back to the unchanged historical value, so the forecast never
+        # moved no matter how far the user dragged the slider (confirmed directly: a +30%
+        # scenario shifted a real product's prediction by <1%). Widening the clip to the
+        # slider's own bound (PRICE_SCENARIO_MULTIPLIER_MIN/MAX, module-level above) lets
+        # every legitimate scenario reach the model while still catching genuinely
+        # out-of-bounds values.
         train_min = getattr(self, 'train_price_min', None)
         train_max = getattr(self, 'train_price_max', None)
         if train_min is not None and train_max is not None:
             prophet_df = prophet_df.copy()
-            prophet_df['price'] = prophet_df['price'].clip(lower=train_min, upper=train_max)
+            prophet_df['price'] = prophet_df['price'].clip(
+                lower=train_min * PRICE_SCENARIO_MULTIPLIER_MIN,
+                upper=train_max * PRICE_SCENARIO_MULTIPLIER_MAX
+            )
 
         forecast = self.model.predict(prophet_df)
 

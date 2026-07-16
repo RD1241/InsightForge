@@ -10,7 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 from core.forecasting.preprocessor import clean_dataset, aggregate_to_product_level, build_features, smooth_outliers
 from core.forecasting.models import (
     GradientBoostingModel, ProphetModel, RidgeRegressionModel,
-    evaluate_predictions, PROPHET_AVAILABLE
+    evaluate_predictions, PROPHET_AVAILABLE,
+    PRICE_SCENARIO_MULTIPLIER_MIN, PRICE_SCENARIO_MULTIPLIER_MAX
 )
 from core.forecasting.registry import (
     save_model_file, save_registry_batch, save_training_report, get_best_model_metadata,
@@ -320,8 +321,8 @@ def generate_future_forecast(df_clean: pd.DataFrame, product_id: str, model_name
     # We need the last 30 days of actuals to initialize the lags and rolling averages
     history_subset = prod_df.sort_values(by='date').tail(30).copy()
     
-    # Constrain price multiplier to conservative bounds [0.7, 1.3] to prevent extreme extrapolations
-    price_multiplier = max(0.7, min(1.3, price_multiplier))
+    # Constrain price multiplier to the shared scenario bounds (models.py) to prevent extreme extrapolations
+    price_multiplier = max(PRICE_SCENARIO_MULTIPLIER_MIN, min(PRICE_SCENARIO_MULTIPLIER_MAX, price_multiplier))
     avg_price = float(history_subset['price'].mean()) * price_multiplier
     
     # Parse overridden promotion days

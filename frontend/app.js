@@ -270,9 +270,6 @@ document.addEventListener("DOMContentLoaded", () => {
         trainingProgressBox: document.getElementById("training-progress-box"),
         trainingProgressFill: document.getElementById("training-progress-fill"),
         trainingProgressText: document.getElementById("training-progress-text"),
-        pretrainCard: document.getElementById("pretrain-recommendation-card"),
-        pretrainReasonText: document.getElementById("pretrain-reason-text"),
-        pretrainPriceNote: document.getElementById("pretrain-price-note"),
         forecastSummaryContainer: document.getElementById("forecast-summary-container"),
         registryAvgMae: document.getElementById("registry-avg-mae") || null,
         registryAvgMape: document.getElementById("registry-avg-mape") || null,
@@ -1921,20 +1918,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // --- Forecasting Page Logic ---
-    async function loadPreTrainAnalysis() {
-        if (!el.pretrainCard) return;
-        try {
-            const analysis = await api.get("/api/forecast/pre-train-analysis");
-            el.pretrainReasonText.textContent = analysis.reason;
-            el.pretrainPriceNote.textContent = analysis.price_note;
-            el.pretrainCard.classList.remove("hidden");
-        } catch (error) {
-            el.pretrainCard.classList.add("hidden");
-        }
-    }
-
     async function loadForecastingPage() {
-        loadPreTrainAnalysis();
         try {
             // Check if training report exists in backend
             const report = await api.get("/api/forecast/report").catch(() => null);
@@ -2143,7 +2127,7 @@ document.addEventListener("DOMContentLoaded", () => {
         el.loaderForecast.classList.remove("hidden");
         el.forecastSummaryContainer.classList.remove("hidden");
         
-        ["exec-demand-outlook", "exec-projected-revenue", "exec-inventory-status", "exec-revenue-loss", "exec-prediction-accuracy", "exec-forecast-reliability"].forEach(id => {
+        ["exec-demand-outlook", "exec-projected-revenue", "exec-inventory-status", "exec-revenue-loss", "exec-prediction-accuracy"].forEach(id => {
             const dom = document.getElementById(id);
             if (dom) dom.classList.add("skeleton-pulse");
         });
@@ -2205,7 +2189,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Draw Forecast
             state.forecastData = data;
             drawForecastChart(data);
-            showToast(`Forecast generated using ${data.model_used}.`, "info");
+            showToast("Forecast updated.", "info");
             
             // 3. Render Simulator Deltas compared to baseline
             const basePredictions = state.baselineForecastData.forecast.predictions;
@@ -2297,20 +2281,27 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Try to find the exact model metrics from the active product's trained models list
                 if (state.trainedReport && state.trainedReport.products && state.trainedReport.products[productId]) {
                     const modelData = state.trainedReport.products[productId].all_models[activeModelName];
-                    if (modelData && modelData.MAPE) mape = modelData.MAPE;
+                    if (modelData && modelData.MAPE !== undefined) mape = modelData.MAPE;
                 }
-                // Qualitative label only ("Poor"/"Good"/"Excellent") — the raw percentage
-                // was dropped from this tile so it stays fully jargon-free for a manager.
-                const accuracyRating = METRICS_EXPLAINER.MAPE.ratingFn(mape);
-                document.getElementById("exec-prediction-accuracy").textContent = accuracyRating.text.split(" (")[0];
+                // Qualitative label only — the raw percentage was dropped from this tile so
+                // it stays fully jargon-free for a manager. Uses its own wording (not the
+                // Learning Center's METRICS_EXPLAINER.MAPE.ratingFn) so this tile can say
+                // "Limited" instead of a bare "Poor" without touching the technical glossary.
+                document.getElementById("exec-prediction-accuracy").textContent = getAccuracyTileLabel(mape);
 
-                // G. Forecast Reliability (R2 derived)
+                // R2 (used below only for the low-confidence explanatory note — the
+                // Forecast Reliability star-rating tile itself was removed, since it was
+                // largely redundant with the Forecast Accuracy tile above)
                 let r2 = (data.metrics && data.metrics.R2) ? data.metrics.R2 : 0;
                 if (state.trainedReport && state.trainedReport.products && state.trainedReport.products[productId]) {
                     const modelData = state.trainedReport.products[productId].all_models[activeModelName];
-                    if (modelData && modelData.R2) r2 = modelData.R2;
+                    if (modelData && modelData.R2 !== undefined) r2 = modelData.R2;
                 }
-                document.getElementById("exec-forecast-reliability").textContent = getConfidenceLabel(r2);
+
+                // Explanatory note — shown only when confidence is genuinely low, so it reads
+                // as "here's why" rather than a blanket caption under every product regardless
+                // of how well it actually forecasts.
+                setLowConfidenceNote(getLowConfidenceNote(r2, state.datasetStats));
 
                 // Today's Recommendation checklist (Tier 1) — plain-language summary of everything above
                 const statusLineMap = {
@@ -2344,7 +2335,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     };
                 }
                 // Remove skeleton loader states
-                ["exec-demand-outlook", "exec-projected-revenue", "exec-inventory-status", "exec-revenue-loss", "exec-prediction-accuracy", "exec-forecast-reliability"].forEach(id => {
+                ["exec-demand-outlook", "exec-projected-revenue", "exec-inventory-status", "exec-revenue-loss", "exec-prediction-accuracy"].forEach(id => {
                     const dom = document.getElementById(id);
                     if (dom) dom.classList.remove("skeleton-pulse");
                 });
@@ -2372,7 +2363,8 @@ document.addEventListener("DOMContentLoaded", () => {
             console.error("Forecast failed:", error);
             el.loaderForecast.classList.add("hidden");
             showToast(`Forecast failed: ${error.message}`, "error");
-            ["exec-demand-outlook", "exec-projected-revenue", "exec-inventory-status", "exec-revenue-loss", "exec-prediction-accuracy", "exec-forecast-reliability"].forEach(id => {
+            setLowConfidenceNote(null); // Don't leave a stale note from a previous product showing
+            ["exec-demand-outlook", "exec-projected-revenue", "exec-inventory-status", "exec-revenue-loss", "exec-prediction-accuracy"].forEach(id => {
                 const dom = document.getElementById(id);
                 if (dom) dom.classList.remove("skeleton-pulse");
             });
@@ -2385,89 +2377,101 @@ document.addEventListener("DOMContentLoaded", () => {
         // Plotly traces
         const histDates = data.history.dates;
         const histSales = data.history.sales;
-        
+
         const foreDates = data.forecast.dates;
         const forePreds = data.forecast.predictions;
         const foreLower = data.forecast.lower_bound;
         const foreUpper = data.forecast.upper_bound;
-        
-        // Trace 1: Historical Sales (Smooth Spline, Indigo)
+
+        // A single 10px dot on the final point only, instead of a marker on every one
+        // of 30-90 daily points — draws the eye to "where this ends up" without the
+        // day-by-day clutter a marker-per-point line reads as.
+        const endDotOnly = (len, size) => Array(Math.max(0, len - 1)).fill(0).concat([size]);
+
+        // Trace 1: Historical Sales (Smooth Spline, indigo — the app's own accent color)
         const traceHist = {
             x: histDates,
             y: histSales,
             type: 'scatter',
             mode: 'lines',
-            line: { color: '#6366f1', width: 2.5, shape: 'spline' },
+            line: { color: '#6366f1', width: 2, shape: 'spline' },
             name: 'Historical Sales'
         };
-        
-        // Trace 2: Predicted Future Demand (Dashed spline, Amber)
+
+        // Dashed = "hasn't happened yet", the same convention used everywhere else forecast
+        // data appears in this app.
         const tracePred = {
             x: foreDates,
             y: forePreds,
             type: 'scatter',
             mode: 'lines+markers',
-            line: { color: '#f59e0b', width: 3.0, dash: 'dash', shape: 'spline' },
-            marker: { size: 5, color: '#f59e0b' },
+            line: { color: '#f59e0b', width: 2, dash: 'dash', shape: 'spline' },
+            marker: { size: endDotOnly(forePreds.length, 9), color: '#f59e0b' },
             name: 'Demand Forecast'
         };
-        
-        // Trace 3: Lower confidence band
-        const traceLower = {
-            x: foreDates,
-            y: foreLower,
-            type: 'scatter',
-            mode: 'lines',
-            line: { width: 0 },
-            showlegend: false,
-            name: '95% CI Lower'
-        };
-        
-        // Trace 4: Upper confidence band (filled to Trace 3 with a beautiful translucent amber glow)
-        const traceUpper = {
-            x: foreDates,
-            y: foreUpper,
-            type: 'scatter',
-            mode: 'lines',
-            line: { width: 0 },
-            fill: 'tonexty',
-            fillcolor: 'rgba(245, 158, 11, 0.08)',
-            name: '95% Confidence Interval'
-        };
-        
-        const traces = [traceHist, traceLower, traceUpper, tracePred];
-        
-        // Add baseline trace if current is simulated
+
+        const traces = [traceHist];
+
+        // The uncertainty band and the scenario-comparison line both compete for
+        // attention, so only one shows at a time: the comparison line matters more while
+        // actively testing a what-if scenario; the uncertainty band matters more when
+        // just looking at the plain forecast. Showing both together (on top of history
+        // and the forecast itself) was the "four things happening at once" clutter.
         const priceMult = state.simulator.priceMultiplier;
         const promoDaysStr = state.simulator.promoDays.join(",");
         const isScenario = (priceMult !== 1.0 || promoDaysStr !== "");
-        
+
         if (isScenario && state.baselineForecastData) {
             const baseDates = state.baselineForecastData.forecast.dates;
             const basePreds = state.baselineForecastData.forecast.predictions;
-            
+
             const traceBase = {
                 x: baseDates,
                 y: basePreds,
                 type: 'scatter',
-                mode: 'lines',
-                line: { color: 'rgba(255, 255, 255, 0.25)', width: 2.0, dash: 'dot', shape: 'spline' },
-                name: 'Baseline Forecast (Normal Price)'
+                mode: 'lines+markers',
+                line: { color: 'rgba(148, 163, 184, 0.6)', width: 2, dash: 'dot', shape: 'spline' },
+                marker: { size: endDotOnly(basePreds.length, 8), color: 'rgba(148, 163, 184, 0.9)' },
+                name: 'Without This Change'
             };
-            
-            // Insert traceBase as index 1 (between History and CI)
-            traces.splice(1, 0, traceBase);
+            traces.push(traceBase, tracePred);
+        } else {
+            // Lower band (invisible line, just the fill anchor for the trace below)
+            const traceLower = {
+                x: foreDates,
+                y: foreLower,
+                type: 'scatter',
+                mode: 'lines',
+                line: { width: 0 },
+                showlegend: false,
+                hoverinfo: 'skip',
+                name: 'Likely Range (low)'
+            };
+            // Upper band, filled down to the lower band — the plain-language "how sure
+            // are we" read, instead of "95% Confidence Interval"
+            const traceUpper = {
+                x: foreDates,
+                y: foreUpper,
+                type: 'scatter',
+                mode: 'lines',
+                line: { width: 0 },
+                fill: 'tonexty',
+                fillcolor: 'rgba(245, 158, 11, 0.10)',
+                hoverinfo: 'skip',
+                name: 'Likely Range'
+            };
+            traces.push(traceLower, traceUpper, tracePred);
         }
-        
+
         const layout = {
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
-            margin: { t: 15, r: 15, b: 35, l: 45 },
-            font: { color: '#94a3b8', family: 'Outfit, Inter, sans-serif' },
+            margin: { t: 15, r: 15, b: 40, l: 45 },
+            font: { color: '#94a3b8', family: 'Outfit, Inter, sans-serif', size: 12 },
             hovermode: 'x unified', // unified tooltip for modern aesthetics!
             xaxis: { gridcolor: 'rgba(255,255,255,0.02)', linecolor: 'rgba(255,255,255,0.06)' },
             yaxis: { gridcolor: 'rgba(255,255,255,0.04)', linecolor: 'rgba(255,255,255,0.06)' },
-            legend: { orientation: 'h', y: -0.2 }
+            legend: { orientation: 'h', y: -0.25 }
         };
         Plotly.purge('chart-forecast');
         Plotly.newPlot('chart-forecast', traces, layout, { responsive: true, displayModeBar: false });
@@ -3187,14 +3191,52 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Plain-language reliability tier from R² — shared by the Business Overview stat and
-    // the exported report's confidence line, so both surfaces agree on the same thresholds.
+    // Plain-language reliability tier from R² — used by the exported report's
+    // "Forecast Confidence" line. No stars: plain text matches the Forecast Accuracy
+    // tile's convention on the dashboard.
     function getConfidenceLabel(r2) {
-        if (r2 >= 0.90) return "⭐⭐⭐⭐⭐ Excellent";
-        if (r2 >= 0.80) return "⭐⭐⭐⭐☆ Very Good";
-        if (r2 >= 0.70) return "⭐⭐⭐☆☆ Good";
-        if (r2 >= 0.50) return "⭐⭐☆☆☆ Fair";
-        return "⭐☆☆☆☆ Low";
+        if (r2 >= 0.90) return "Excellent";
+        if (r2 >= 0.80) return "Very Good";
+        if (r2 >= 0.70) return "Good";
+        if (r2 >= 0.50) return "Fair";
+        return "Limited";
+    }
+
+    // Business-facing accuracy tile label — deliberately separate from
+    // METRICS_EXPLAINER.MAPE.ratingFn (which stays precise/technical for the Learning
+    // Center glossary): "Limited" instead of "Poor" reads as a data characteristic to
+    // explain rather than a verdict that the app doesn't work.
+    function getAccuracyTileLabel(mape) {
+        // Derives from the same thresholds as the Learning Center glossary
+        // (METRICS_EXPLAINER.MAPE.ratingFn) instead of re-declaring them, so the two
+        // surfaces can never disagree on what counts as "Good" for a given MAPE value.
+        const technicalLabel = METRICS_EXPLAINER.MAPE.ratingFn(mape).text.split(" (")[0];
+        return technicalLabel === "Poor" ? "Limited" : technicalLabel;
+    }
+
+    // Null when confidence is fine; otherwise the explanatory caption for why it isn't.
+    // Uses the dataset's overall history span (a per-product span isn't available
+    // client-side) so the wording says "your dataset" rather than falsely implying this
+    // specific product's own history was measured.
+    function getLowConfidenceNote(r2, datasetStats) {
+        if (r2 >= 0.70) return null;
+        let historyPhrase = "limited sales history";
+        const days = datasetStats && datasetStats.days_span;
+        if (typeof days === "number" && days > 0) {
+            historyPhrase = days < 60 ? `only ${days} days` : `only ~${Math.round(days / 30)} months`;
+        }
+        return `Forecast confidence is naturally lower with ${historyPhrase} of sales history in your dataset — it improves as more sales data comes in.`;
+    }
+
+    function setLowConfidenceNote(note) {
+        const el = document.getElementById("low-confidence-note");
+        if (!el) return;
+        if (note) {
+            el.textContent = note;
+            el.classList.remove("hidden");
+        } else {
+            el.classList.add("hidden");
+        }
     }
 
     // Map model names to clear, business-friendly engine titles. Only used inside the

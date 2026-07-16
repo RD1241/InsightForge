@@ -7,31 +7,38 @@ InsightForge is an advanced, production-quality AI-Powered Retail Decision Suppo
 ## 🌟 Key Features
 
 1. **Dataset Ingestion & Auto-Mapping (Data Hub)**:
-   - Supports CSV uploads and detects schemas dynamically.
-   - Automatically maps columns from Kaggle datasets (`date, store, item, sales`) or custom schemas.
+   - Supports CSV uploads (including non-UTF-8 encodings and genuine Excel files saved with a `.csv` extension) and detects schemas dynamically.
+   - Automatically maps columns from Kaggle datasets (`date, store, item, sales`) or custom schemas, including several real-world price-column aliases (`selling_price`, `base_price`, `unit_price`).
    - Generates mock metadata (categories, prices) and simulates inventory stock cycles if missing.
    - Built-in **Retail Simulator Demo** to generate 2 years of realistic seasonal retail demand.
+   - Dataset Health Check with plain-language warnings, and a Clear Dataset control that resets everything for a fresh upload.
 
-2. **Automatic Exploratory Data Analysis (EDA)**:
-   - Descriptive statistics and missing values analysis.
-   - Interactive variable correlation heatmaps (rendered via Plotly.js).
-   - Seasonality decomposition: Weekly sales profiles (weekend spikes) and monthly seasonal peaks.
-   - Automatic anomalous sales detection using the **Interquartile Range (IQR)** method.
+2. **Sales Insights (Business Intelligence Dashboard)**:
+   - Filterable by product, category, and date range (with quick presets), backing 10+ curated charts: sales trend, weekly/monthly seasonality, top products, revenue by category, inventory health distribution, fast/slow movers, and promotion impact.
+   - Every chart's "Explain" button asks the AI Analyst to summarize it in plain language.
+   - Automatic anomalous sales detection using the **Interquartile Range (IQR)** method, with an option to smooth outliers before training.
 
 3. **Time Series Forecasting Engine**:
-   - Compares **Linear Regression**, **Random Forest Regressor**, and **Prophet** models.
+   - Compares **Ridge Regression**, **Gradient Boosting** (`HistGradientBoostingRegressor`), and **Prophet** — the recommended model per product is chosen automatically from real validation performance, never hardcoded.
    - **Strict Time-Based Split**: Evaluates models on a 30-day chronological split (never random shuffle) to prevent future data leakage.
    - **Residual-based 95% Confidence Intervals**: Computes residuals variance on ML models for confidence bounds matching Prophet.
    - **Recursive Multi-Step Forecasting**: Automatically feeds prior predictions back into lags and rolling averages to simulate future dates.
+   - **What-If Simulator**: adjust price (±30%) and toggle future promotion days per scenario, with scenario-vs-baseline comparison and a saved scenario history.
+   - Plain-language "Forecast Confidence" and business-decision output (reorder quantity, stockout risk, revenue at risk) by default; raw model names and MAE/MAPE/R² metrics are available on demand behind an "Advanced Technical Details" disclosure, for technical/academic reference without cluttering the primary view.
+   - **Export Report**: generates a printable PDF-style business report (dataset summary, forecast confidence, AI recommendation) with the same technical details in a clearly labeled reference appendix.
    - Persistent Model Registry saving binary `.pkl` files and metadata index in `models_registry.json`.
    - Generates a central `training_report.json` summarizing optimization runs.
 
 4. **AI Retail Analyst & Chat Panel**:
-   - Collapsible dashboard panel serving as an intelligent forecasting copilot.
-   - **Structured Tool Calling**: Agent decides which deterministic tool to call (`top_selling_products`, `low_stock_products`, `inventory_health`, etc.) instead of executing raw python code.
-   - **Evidence-Based Explanations**: Agent summarizes structured JSON outputs, explaining metrics (MAE, MAPE, $R^2$) simply.
+   - Collapsible, resizable dashboard panel serving as an intelligent forecasting copilot (Retail Business Advisor).
+   - **Structured Tool Calling**: Agent decides which deterministic tool to call (`top_selling_products`, `low_stock_products`, `inventory_health`, `generate_chart_spec`, etc.) instead of executing raw python code — 11 tools in total.
+   - **AI-Generated Charts from Chat**: ask for a chart in plain English ("compare Milk and Bread", "pie chart of category revenue") and the agent builds a real Plotly chart from actual data, inline in the chat.
+   - **Evidence-Based, Plain-Language Explanations**: Agent summarizes structured JSON outputs in business terms by default, only using technical terms (MAE, MAPE, R²) if the user's own question is technical.
    - **Sparkles Explain Action**: Every dashboard chart has an "Explain" button that triggers the Analyst to summarize the visualization in natural language.
    - Unified support for **Groq API** (free tier cloud) and **Ollama** (local offline models) with session memory.
+
+5. **Learning Center**:
+   - A drawer of business-question-first ML explainers (e.g. "How far off are my forecasts, on average?") with the technical formula/definition available underneath for anyone who wants it — separates the plain-language reading from the exam-ready technical one.
 
 ---
 
@@ -50,7 +57,7 @@ backend/
   core/
     forecasting/
       preprocessor.py    # Dataset-agnostic validation, cleaning, and lag/rolling feature engineering
-      models.py          # Forecasting wrappers (Linear Regression, Random Forest, Prophet)
+      models.py          # Forecasting wrappers (Ridge Regression, Gradient Boosting, Prophet)
       registry.py        # Model serialization, best-model logic, and recommendation reasons
       synthetic_data.py  # Realistic 2-year daily retail demand generator
     agent/
@@ -137,6 +144,6 @@ Open your browser and navigate to:
 
 If asked by examiners to explain components during your BCA presentation, refer to these principles:
 * **Time Series Splits**: Shuffling data randomly leaks future information to past metrics. We use a chronological cut-off (training on early dates, evaluating on the final 30 days) to match real forecasting.
-* **Recursive Multi-Step Predictions**: For ML models (LR, RF), we do not hardcode future lags. We forecast day $T+1$, append the prediction to the sales buffer, and use it as a feature to predict day $T+2$.
+* **Recursive Multi-Step Predictions**: For the ML models (Ridge, Gradient Boosting), we do not hardcode future lags. We forecast day $T+1$, append the prediction to the sales buffer, and use it as a feature to predict day $T+2$.
 * **Confidence Intervals for ML**: Standard deviation of training residuals is calculated ($\sigma_e$). 95% confidence bands are computed as $\hat{y} \pm 1.96 \cdot \sigma_e$.
 * **Security & Determinism**: The AI Analyst does not execute raw python/pandas code, avoiding prompt injections. The agent classifies the intent, triggers safe pre-compiled database tools, and translates the JSON results back to the user.

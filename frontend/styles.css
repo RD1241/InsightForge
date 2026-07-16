@@ -321,6 +321,8 @@ a {
 .text-center { text-align: center; }
 .text-sm { font-size: 0.85rem; }
 .text-xs { font-size: 0.75rem; }
+.text-2xs { font-size: 0.68rem; }
+.italic { font-style: italic; }
 .block { display: block; }
 .cursor-pointer { cursor: pointer; }
 
@@ -1571,40 +1573,40 @@ a.btn {
     background: rgba(99, 102, 241, 0.04);
 }
 
-/* Responsive Grid-6 layout for Executive Summary Board */
-.grid-6 {
+/* Responsive Grid-5 layout for Executive Summary Board */
+.grid-5 {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 1rem;
 }
 
 /* Executive Summary Board — a more compact stat-box variant than the default
-   (smaller value text, centered, fixed min-height) so six tiles fit one row.
+   (smaller value text, centered, fixed min-height) so the tiles fit one row.
    Was previously six copies of the same inline style block per box (Phase 4 cleanup). */
-.grid-6 .stat-box {
+.grid-5 .stat-box {
     padding: var(--space-4) var(--space-2);
     align-items: center;
     justify-content: center;
     min-height: 90px;
     gap: var(--space-1);
 }
-.grid-6 .stat-label {
+.grid-5 .stat-label {
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     opacity: 0.8;
     font-weight: 600;
 }
-.grid-6 .stat-value {
+.grid-5 .stat-value {
     font-size: 1.15rem;
 }
 @media (max-width: 1024px) {
-    .grid-6 {
+    .grid-5 {
         grid-template-columns: repeat(3, 1fr) !important;
     }
 }
 @media (max-width: 640px) {
-    .grid-6 {
+    .grid-5 {
         grid-template-columns: repeat(2, 1fr) !important;
     }
 }
@@ -1618,7 +1620,7 @@ a.btn {
 
 /* Extra-small screens: collapse executive board cards to single column */
 @media (max-width: 480px) {
-    .grid-6 {
+    .grid-5 {
         grid-template-columns: 1fr !important;
     }
 }
@@ -1971,19 +1973,6 @@ a.btn {
     padding: var(--space-2) 8px;
     border-radius: var(--radius-sm);
     border: 1px solid rgba(255, 255, 255, 0.03);
-}
-
-/* Pre-Training AI Preview card (Phase 3) */
-.pretrain-card {
-    border-left: 3px solid var(--accent);
-    padding: 14px 18px;
-}
-.pretrain-label {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--accent-light);
 }
 
 /* Markdown lists/headings inside chat messages (Phase 4 — renderMarkdownSafely()) */

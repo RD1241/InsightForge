@@ -21,6 +21,12 @@
 11. [Trade-offs](#11-trade-offs)
 12. [Known Limitations](#12-known-limitations)
 13. [Future Roadmap](#13-future-roadmap)
+14. [Version 2.0 Hardening & Optimization Upgrade Summary](#14-version-20-hardening--optimization-upgrade-summary)
+15. [Version 3.0 Executive Experience & AI Decision Intelligence](#15-version-30-executive-experience--ai-decision-intelligence)
+16. [Version 3.2 — Manager-First Redesign, Backend Scale Optimization, and Model Lineup Upgrade](#16-version-32--manager-first-redesign-backend-scale-optimization-and-model-lineup-upgrade)
+17. [Version 4.0 — Final 5-Phase Development Cycle](#17-version-40--final-5-phase-development-cycle)
+18. [Real-World Bug-Fix Round](#18-real-world-bug-fix-round)
+19. [UX Honesty & Jargon-Removal Pass](#19-ux-honesty--jargon-removal-pass)
 
 ---
 
@@ -78,7 +84,7 @@ d:/Project_C/
 │   ├── core/
 │   │   ├── forecasting/        # Entire ML forecasting engine
 │   │   │   ├── preprocessor.py     # Schema detection, cleaning, aggregation, feature engineering
-│   │   │   ├── models.py           # ML model classes (LR, Ridge, RF, Prophet)
+│   │   │   ├── models.py           # ML model classes (Ridge, Gradient Boosting, Prophet)
 │   │   │   ├── train_pipeline.py   # Orchestrates training, evaluation, parallel execution, forecast generation
 │   │   │   ├── registry.py         # Persists trained models (pickle) and metadata (JSON)
 │   │   │   ├── eda.py              # Exploratory Data Analysis report generator
@@ -217,7 +223,7 @@ Generates an N-day future demand forecast, supporting scenario overrides and bus
 - **Response (200)**: `{ product_id, product_name, category, model_used, metrics, recommendation_reason, forecast_horizon_days, price_multiplier_applied, simulated_price, history, forecast, decision_support: { current_stock, avg_daily_sales, safety_stock_threshold, status, reorder_date, recommended_reorder_qty, stockout_days_projected, revenue_at_risk, projected_stock } }`
 - **Forecast Method**:
   - **Prophet**: Direct `predict(future_df)` call with extra price/promo regressor vectors.
-  - **ML Models (LR, Ridge, RF)**: Autoregressive recursive forecast loop with price scaling and lag propagation.
+  - **ML Models (Ridge, Gradient Boosting)**: Autoregressive recursive forecast loop with price scaling and lag propagation.
   - **Performance**: Asynchronously offloaded to worker threads via `asyncio.to_thread` to keep the event loop non-blocking.
 
 #### `GET /api/forecast/compare?product_id=PRD_01`
@@ -657,7 +663,7 @@ A lightweight `models_registry.json` was chosen over SQLite or PostgreSQL becaus
 - Protected by `threading.Lock()` for concurrent writes
 
 ### 9.7 Confidence Intervals via Residual Std
-Prophet provides native Bayesian credible intervals. For LR, Ridge, and RF, confidence intervals are approximated as `±1.96 * residual_std * √step`. The `√step` factor grows uncertainty proportionally with forecast horizon — a standard approximation for AR-type models.
+Prophet provides native Bayesian credible intervals. For Ridge and Gradient Boosting, confidence intervals are approximated as `±1.96 * residual_std * √step`. The `√step` factor grows uncertainty proportionally with forecast horizon — a standard approximation for AR-type models.
 
 ### 9.8 Session Memory as Flat JSON Files
 Chat sessions are persisted as JSON files per `session_id`. This is simpler than Redis or a database and survives server restarts. The 10-message sliding window prevents unbounded growth.
@@ -707,7 +713,7 @@ Separating classification from synthesis prevents the analyst LLM from both rout
 
 3. **Prophet training time**: Prophet trains Stan's MCMC sampler in C++. Training 5 products takes ~5–15 seconds. Training 50+ products could take several minutes. The async executor prevents server freezing but the user must wait.
 
-4. **Confidence interval approximation**: LR/Ridge/RF confidence intervals are estimated from training set residual standard deviation, not from a proper predictive posterior. The `√step` growth factor is a practical approximation, not a theoretically derived quantity.
+4. **Confidence interval approximation**: Ridge/Gradient Boosting confidence intervals are estimated from training set residual standard deviation, not from a proper predictive posterior. The `√step` growth factor is a practical approximation, not a theoretically derived quantity.
 
 5. **Pickle serialization**: scikit-learn and Prophet models are pickled. Pickle files are version-sensitive — if the Python or library version changes, old `.pkl` files may not load. No version metadata is stored in the registry.
 
@@ -729,7 +735,7 @@ Separating classification from synthesis prevents the analyst LLM from both rout
 
 - **Streaming LLM Responses**: Replace single `await call_llm` with a server-sent event (SSE) stream to progressively render analyst responses and eliminate typing wait time.
 - **Multi-Session Support**: Pass a user-generated `session_id` from the UI (UUID) instead of hardcoding `"default_session"`. Each browser tab would maintain its own conversation.
-- **Future Promotions UI**: Allow users to mark planned promotion dates before generating forecasts, so the recursive forecast seeds the correct `promotion_flag` for future days.
+- ~~**Future Promotions UI**: Allow users to mark planned promotion dates before generating forecasts.~~ **Done** — the What-If Simulator's promotion-day checkbox grid (§16 era) lets users toggle future promo days per scenario, seeding the correct `promotion_flag` for the recursive forecast and Prophet's regressor alike.
 
 ### Medium-Term Improvements (Engineering Investment)
 
@@ -737,7 +743,7 @@ Separating classification from synthesis prevents the analyst LLM from both rout
 - **SQLite Registry**: Replace `models_registry.json` with an SQLite database using SQLAlchemy for proper concurrent access, query capabilities, and model versioning.
 - **Model Versioning**: Track multiple training runs per product. Allow reverting to a previous model version without retraining.
 - **Multi-Tenant Dataset Isolation**: Per-user dataset namespacing using session tokens. Each user uploads and trains independently on the same server instance.
-- **Confidence Interval Bootstrapping**: Replace the residual std approximation with a proper bootstrapped prediction interval for LR/Ridge/RF models.
+- **Confidence Interval Bootstrapping**: Replace the residual std approximation with a proper bootstrapped prediction interval for the Ridge/Gradient Boosting models.
 - **Automated Retraining Schedule**: Trigger retraining automatically when the dataset is updated, using a background scheduler (e.g., APScheduler or Celery).
 
 ### Long-Term Vision (Architecture Evolution)
@@ -850,3 +856,173 @@ Measured effect on the existing demo dataset: Gradient Boosting fits and recursi
 ---
 
 *This document was updated to reflect the Version 3.2 manager-first redesign, backend scale optimization, and model lineup upgrade. Prior sections describing Random Forest/Linear Regression or the 4-model lineup have been revised in place where they conflicted; §16 is the authoritative summary of what changed and why.*
+
+---
+
+## 17. Version 4.0 — Final 5-Phase Development Cycle
+
+Phase 0 of this cycle (manager-first redesign, model lineup upgrade, dataset/forecast correctness fixes) is `596d18b`, already documented as §16. This section covers Phases 1–4, all committed in a single continuous session on **2026-07-16, 01:57–12:16**.
+
+### 17.1 Phase 1: Sales Insights BI Redesign & Full Filtering (`75579c5`, 01:57)
+
+**Backend (`eda.py`, `dataset.py`):**
+- 5 new curated aggregations: revenue by category, monthly revenue trend, inventory health distribution, fast/slow movers (30-day vs. prior 30-day), and promotion impact per category. Inventory health reuses the exact same stock-status thresholds as the Forecast page's decision support so the two pages never disagree.
+- `GET /api/dataset/eda` now accepts `product_ids`/`categories`/`start_date`/`end_date` query params, applied as a pandas mask before aggregation. The existing `_cached_eda` slot is only ever read/written by the exact no-filter request; filtered requests always recompute fresh.
+- New `GET /api/dataset/products` endpoint (deduped catalog) to power filter pickers without bloating the EDA payload.
+- **Bug found while testing filters**: narrowing the date range to a single month makes the `month` column constant, which makes Pearson correlation mathematically undefined (NaN) — and NaN isn't valid JSON, so any narrow date filter 500'd. Fixed by treating undefined correlation as 0.
+- Benchmarked the filtered path at 10k–200k rows: 33–72ms, well under the unfiltered path since filtering shrinks the working set before the per-product outlier loop.
+
+**Frontend (`app.js`, `index.html`, `styles.css`):**
+- New filter bar: searchable product multi-select, category toggle chips, date range inputs + quick presets (30 days / quarter / year / all time).
+- 5 new chart components reusing existing conventions (`horizontalRankingLayout` for ranking bars, the same stale-response-token + debounce pattern already used for EDA/forecast calls).
+- Filters and filter options reset alongside everything else in `resetAllAppState()` on a new dataset load.
+
+Also: `.claude/launch.json` now runs the backend with `--reload` for faster iteration — safe now that dataset freshness is a frontend `sessionStorage` concern (Phase 0) rather than a backend startup hook.
+
+### 17.2 Phase 2: AI-Generated Charts from Chat (`17dac40`, 02:07)
+
+**Backend (`tools.py`, `agent.py`, `routers/agent.py`):**
+- New `generate_chart_spec()` tool: constrained vocabulary only (`chart_type` in `{bar, line, donut, area}`, `metric` in `{units_sold, revenue, stock}`, `dimension` in `{product, category, date, day_of_week, month}`), reusing the same filter-then-aggregate approach as `eda.py`'s `generate_eda_report()` so a chat-requested chart and the equivalent Sales Insights filtered view always agree. Every number comes from real pandas aggregation — the LLM only ever picks *which* chart to build, never the values, the same anti-hallucination pattern as the other 10 tools.
+- Added as an 11th classifier tool. Product names (free text) are resolved through the existing `resolve_product_id()` fuzzy matcher first, same as `compare_sales`/`forecast_product`/etc.
+- **Bug found while testing**: "show top 10 products" initially routed to the existing `top_selling_products` tool instead of generating a chart, since both tool descriptions plausibly matched. Sharpened both descriptions so visual-intent phrasing ("show", "plot", "chart", "graph", "compare X and Y") prefers `generate_chart_spec`.
+- `POST /api/agent/chat` response extended additively to `{"response": str, "chart": ChartSpec|null}` — the chart is passed straight through from the tool's output, never round-tripped through the synthesis LLM call, which only ever writes a short caption.
+
+**Frontend (`app.js`, `styles.css`):**
+- New `renderChatChart()` draws a Plotly chart inside the bot's message bubble (horizontal bar for rankings, line/area for time series, donut for category composition) — reuses the same single-hue-for-magnitude convention as Sales Insights' `horizontalRankingLayout()`, sized for a chat bubble rather than a dashboard card.
+- Bot messages carrying a chart get a widened bubble (`.message-has-chart`) since the default 85% max-width is sized for text only.
+
+Verified live: all 4 of the plan's example prompts ("show top 10 products", "compare Milk and Bread sales", "pie chart of category revenue", "show revenue for the last 3 months") produce correct real-data charts; a non-chart question still routes to the existing tools unaffected.
+
+### 17.3 Phase 3: Pre-Train AI Preview + Real Training Progress (`f1011c2`, 02:17)
+
+> **Superseded**: the pre-train AI preview card described below was removed in its entirety during the 2026-07-16 UX honesty pass — see §19.6. It's kept here as history since it did ship and work correctly for a time; the real training-progress bar (the other half of this phase) is unaffected and remains in place today.
+
+**Model lineup re-evaluation (no code change — findings only)**: checked real per-product metrics across all 5 demo products now that Phase 0's price fix was in place. Ridge never won outright but stayed legitimately useful (cheap, transparent, correctly excluded from "best model" whenever its R² goes negative); Gradient Boosting won on 1/5; Prophet dominated on 4/5, consistent with the dataset's strong designed weekly seasonality. Matches the M5-competition-backed expectation from the original lineup swap (§16.3) — no lineup change made.
+
+**Pre-training AI preview** (`core/forecasting/analysis.py`, new at the time, since deleted): `analyze_pretrain_characteristics()` computed cheap, model-free descriptive stats (weekly seasonality swing, average price variation, 90-day trend shift) *before* any model was fit, producing a plain-language suggested model + reason, shown in a card above the Train button via `GET /api/forecast/pre-train-analysis`. Explicitly framed as a preview, not a promise. Verified at the time: the heuristic correctly flagged the demo dataset's 52% weekly swing and suggested Prophet, matching the actual training outcome.
+
+**Real training progress** (`train_pipeline.py`, `routers/forecasting.py`) — still in place:
+- Module-level progress dict + lock, updated from inside `_train_single_product()` (the function that runs in each worker thread) via a `try`/`finally` so it advances on every code path — success, the too-little-history skip, or a mid-fit exception — not just the happy path. Denominator is products (not products × 3 models), so Prophet's existing silent per-product failure never leaves the bar stuck short of 100%.
+- New `GET /api/forecast/train/progress` endpoint, polled every 750ms from the frontend while `POST /train` is in flight. Replaces the old fully-fake `setInterval` random-increment bar with real current-product/model/percent and a client-side ETA.
+
+### 17.4 Phase 4: Visual Polish, Chat Resize, Forecast Page Decluttering (`f61a9bf`, 12:16)
+
+**Design tokens & inline-style cleanup** (`styles.css`, `index.html`):
+- New `--space-1..8` and `--radius-sm/md/lg` custom properties in `:root`, matching the existing color/font token pattern.
+- Reconciled the worst duplicated inline styles the Phase 1–3 work surfaced: 4 copies of the same `ai-observation-box` style block, the 6-tile Executive Summary Board (each tile had ~200 chars of duplicated inline style; consolidated into a single `.grid-6 .stat-box` modifier — later resized to `.grid-5` when the Forecast Reliability tile was removed, §19.5), the CSV template download link, and the What-If simulator's day-checkbox cells.
+
+**Forecast page decluttering**: merged the "AI Recommendation" and "What should you do next?" cards into one card with two sections and a divider — both answer the same underlying question and had identical `border-pulse` styling as two separate cards. All existing element IDs preserved untouched.
+
+**What-If simulator sizing**: larger price slider (custom-styled thumb) and larger promo-day checkboxes (18px, was 13px) — CSS only, no functional change.
+
+**Chat panel**: draggable resize handle on the left edge (clamped 380–720px, width preference persisted per-browser in `localStorage`), wider default (440px, was 380px), and `renderMarkdownSafely()` extended to handle headings and bulleted/numbered lists.
+
+**Chat tone**: added an explicit rule to `analyst_system_prompt` (`agent.py`) preferring plain business language over ML/statistics jargon (MAE, R²) unless the user's own question is technical.
+
+One open item noted at the time: the chat panel's exact on-screen positioning couldn't get a clean geometric read via the automated browser tooling despite the CSS being verified correct at the source/CSSOM level. **Resolved** — later confirmed via the user's own screenshots that the panel renders and opens correctly; this was a tooling artifact of the automated browser environment, not a real bug.
+
+---
+
+## 18. Real-World Bug-Fix Round
+
+Found by testing against the user's own uploaded retail CSV rather than the synthetic demo dataset — all three commits land on **2026-07-16, 15:00–16:00**, immediately after the Phase 1–4 cycle above.
+
+### 18.1 CSV Upload: Non-UTF-8 Encoding (`2faae25`, 15:00)
+
+Real-world CSV exports, especially from Excel on Windows, are frequently not plain UTF-8 — a byte-order mark, or the Windows-1252 codepage (triggered by currency symbols or other special characters), are both common and previously caused an unhandled `UnicodeDecodeError` → 422 on upload. Found via a live user-reported failure.
+
+New `read_csv_robust()` tries `utf-8-sig` (covers plain UTF-8 and UTF-8-with-BOM) then falls back to `cp1252` (a safe last resort — single-byte, so it can decode any byte sequence). Applied at both call sites that read a user's file: the upload validation *and* `get_active_df()` (every later read of the saved file) — fixing only the first would have made upload appear to succeed while every subsequent page load failed the same way.
+
+### 18.2 CSV Upload: Excel Files Mislabeled as `.csv` (`02b683f`, 15:12)
+
+Root cause of the upload failure that survived the encoding fix: the user's file wasn't actually CSV text at all — it was a genuine `.xlsx` file (confirmed via magic bytes: `PK\x03\x04`, the ZIP signature every `.xlsx` is built on) that had been named/saved with a `.csv` extension. No encoding fallback can parse binary Excel data as text, so this needed a different fix: detect real file content instead of trusting the extension.
+
+- New `_looks_like_excel()` checks magic bytes (ZIP for `.xlsx`/`.xlsm`, OLE2 for legacy `.xls`) rather than the filename, since the filename is exactly what's unreliable here.
+- `read_tabular_upload()` dispatches to `pd.read_excel()` or the existing CSV encoding chain accordingly. Upload now also genuinely accepts `.xlsx`/`.xls` files directly, not just mislabeled ones.
+- Storage normalized: whatever format comes in, the parsed DataFrame is written back out as clean CSV, so every downstream reader stays simple.
+- A third real-world price-column alias (`unit_price`, alongside `selling_price`/`base_price`) found via the user's actual file — added to `preprocessor.py`'s price-alias chain.
+- Added `openpyxl` to `backend/requirements.txt` (required by `pd.read_excel()` for `.xlsx`).
+
+### 18.3 Prophet Yearly-Seasonality Bug, ML Jargon Cleanup Round 1, Profit Charts, Chat Maximize (`b39d2c6`, 16:00)
+
+**Prophet accuracy investigation** (`models.py`) — triggered by real user feedback that forecast accuracy was under 60% on their own dataset:
+- Root cause: `yearly_seasonality` was hardcoded `True`, forcing Prophet to fit a yearly cycle on datasets that had never actually completed one. On the user's real 89-day upload this was catastrophic (one product's R² was **-1860**; MAPE over 1000%).
+- Prophet's own `yearly_seasonality='auto'` is not a safe substitute — it requires ≥730 days (2 full years), which incorrectly disabled real, learnable yearly seasonality on the 699-day demo dataset (R² dropped from 0.93 to 0.48 under `'auto'`). Settled on a self-computed **365-day** (one full cycle observed) threshold instead, verified correct on both datasets: demo back to R²=0.92, the real dataset's worst product from -1860 to -0.11.
+- Evaluated the user's suggestion to replace the 3-model comparison with a single "best in the world" model — declined, with evidence: post-fix, Prophet/Ridge/Gradient Boosting won 10/6/4 of 20 real products respectively, so no single model dominates. A bigger single model would also need *more* data than 89 days, not less.
+
+**ML jargon cleanup — round 1**: `get_recommendation_reason()` (`registry.py`) rewritten from raw metric text ("MAE = 6.71, R² = 0.92") to plain language with a qualitative confidence note; exact numbers stayed in the already-collapsed Advanced Technical Details table only. *(This was later found to be incomplete — the exported PDF report had its own separate, unfixed code path. See §19.1.)*
+
+**Profit metric**: AI chart generation didn't support "profit" — a real "profit and loss" chat request silently fell back to revenue. Added `profit` metric to `generate_chart_spec` (prefers a real `profit` column, else derives from `revenue - cost_price`, else declines gracefully). Also fixed a chart-type bug found while verifying: a "pie chart... over the last 30 days" request produced an unreadable 30-slice donut — date-dimension requests now force `line` regardless of literal wording.
+
+**Chat maximize**: the Phase 4 drag handle alone wasn't discoverable in real testing; added a visible maximize/restore button in the chat header.
+
+---
+
+## 19. UX Honesty & Jargon-Removal Pass
+
+Two commits (`bed56c9`, `14586e5`, 2026-07-16 16:49–18:22) plus a longer follow-on session addressing feedback relayed from a second AI the user consulted, verified against the actual repo rather than taken at face value, per the standing "verify before trusting a pasted proposal" practice. **As of this section, §19.3 onward reflects the current working tree and has not yet been committed** — check `git log`/`git status` for the latest commit state before relying on commit hashes for that portion.
+
+### 19.1 Export Report & Dashboard Jargon Cleanup, AI Summary Bug Fix, INR Currency (`bed56c9`, 16:49)
+
+The round-1 jargon cleanup (§18.3) only touched the on-screen recommendation card — the exported PDF report still dumped raw MAE/MAPE/R² and named all 3 candidate models directly. Fixed properly this time:
+- Recommendation text and always-visible UI labels no longer name the underlying algorithm anywhere (dashboard badge, chart subtitle, `get_recommendation_reason()`). Real model names/metrics stay available in the existing collapsed Advanced Technical Details section and a new **"Appendix A: Technical Model Comparison (Reference Only)"** section at the end of the exported report, for the user's own viva/thesis reference — a deliberate product decision (see the two-audience discussion below).
+- Fixed the report's "AI Analyst Summary", found to be almost always blank ("No custom audit logs generated yet.") — it read `prodData.recommendation_reason`, a field that only exists on the per-request `/api/forecast/predict` response (`state.forecastData`), never on the static training report object it was actually reading from.
+- A related bug in the same code: the "has the user chatted" check counted `<p>` tags rather than message bubbles, and the welcome message alone has 2 paragraphs — so it always thought the user had chatted, and even when they had, it grabbed only the *last paragraph* of the final reply rather than the whole thing. Fixed to count bubbles and use the full last bubble's content.
+- Chat agent had no currency instruction anywhere in its system prompt and defaulted to `$` instead of ₹ for an Indian retail app — added an explicit instruction to `analyst_system_prompt`.
+
+**Product framing established this round** (in response to a second AI's relayed proposal, itself independently reaching a very similar conclusion): InsightForge serves two audiences with one interface — a retail manager who should never need to know Prophet/MAE/R² exist, and the student/examiner who needs exactly those details for a viva. Resolution: hide model names, counts, and raw metrics from every default-visible surface; keep them fully available, clearly labeled as reference/technical, behind the existing collapsed disclosures and the new report appendix. The 3-model internal comparison itself was kept (not consolidated to one model) — evidence-backed, per §18.3's win-distribution finding.
+
+### 19.2 Forecast Accuracy Tile: Raw Percentage Removed (`14586e5`, 18:22)
+
+The Business Overview "Forecast Accuracy" tile already led with a qualitative label (Poor/Good/Excellent) but still showed a raw "56.0% accuracy" sub-badge underneath — the last number-shaped leftover of the same jargon-removal effort. Removed the number entirely (qualitative label only); deleted the now-unused DOM element and its population code rather than leaving it dead.
+
+### 19.3 Prophet What-If Price-Clip Bug
+
+`ProphetModel.predict()` clipped its `price` regressor to the *exact* historical `[min, max]` range it trained on. For any product whose historical price barely varied (common for fixed-MRP retail items), this made the What-If Simulator's price slider a complete no-op — confirmed directly: a +30% price scenario shifted a real product's prediction by <1%, since the requested price was clamped straight back to the unchanged historical value regardless of the multiplier.
+
+Fixed by widening the clip to `[train_min × 0.7, train_max × 1.3]` — matching the slider's own allowed range (`price_multiplier` ∈ [0.7, 1.3]) — so every legitimate scenario reaches the model while the clip still catches genuinely out-of-bounds values. The 0.7/1.3 bound is now a single named constant (`PRICE_SCENARIO_MULTIPLIER_MIN/MAX` in `models.py`) imported by `train_pipeline.py`'s clamp and `routers/forecasting.py`'s `Query` validation — previously all three hardcoded the same literal independently, found during this session's code-review pass (§19.7).
+
+**Important caveat, found while diagnosing a specific user report**: on the user's own uploaded dataset, this fix didn't visibly change the What-If slider's effect, because the deeper issue is upstream of any code fix — every one of that dataset's 20 products has a `unit_price` column ranging ~₹15–450 essentially independent of which product it is, with near-zero correlation to units sold (-0.26 to +0.24 across products). That pattern is consistent with price having been randomly generated per row rather than tied to the actual product, most likely in whatever script generated that "real" dataset for the capstone. No model can honestly find a price effect in that data — the slider doing little for that specific file is the model being correct, not broken.
+
+### 19.4 Forecast Chart Redesign
+
+Per user feedback that the chart still "looked machine generated": ran the existing `drawForecastChart()` colors through the project's `dataviz` skill validator rather than eyeballing them (indigo `#6366f1` / amber `#f59e0b`, the app's own `--accent`/`--warning` tokens) — both pass colorblind-safety (CVD ΔE 140.9/81.2/148.2, well above the ≥12 target) and contrast-vs-surface; amber alone fails the dark-mode "lightness band" aesthetic check, but wasn't changed since it's a pre-existing app-wide brand token, not something to fork just for one chart.
+
+- **Simplified legend labels**: "95% Confidence Interval" → "Likely Range"; "Baseline Forecast (Normal Price)" → "Without This Change".
+- **Reduced clutter**: the uncertainty band and the scenario-comparison line no longer render simultaneously — only one shows at a time depending on whether a What-If scenario is active, instead of 4 overlapping visual elements at once.
+- **Visual polish**: removed per-day markers on the forecast line (was cluttering a 30–90 point series); replaced with a single 9–10px end-of-line dot via a per-point `marker.size` array. 2px line widths throughout (was 2.5–3px).
+- Also fixed: a toast (`"Forecast generated using ${model}."`) that leaked the raw model name on every forecast/scenario run — now a generic `"Forecast updated."`.
+
+### 19.5 Forecast Reliability Tile Removed; Export Report Confidence De-Starred
+
+Every one of the user's real dataset's 20 products scored in the worst "Poor accuracy / Low reliability" band (R² -0.48 to 0.16, MAPE 31–95%) — confirmed as a genuine dataset characteristic (short ~4-month history plus the near-random price column, §19.3), not a display bug. Per direct user request:
+- Removed the "Forecast Reliability" star-rating stat tile from the Business Overview grid entirely (kept "Forecast Accuracy" as the one confidence signal on the dashboard). Grid resized from 6 columns (`.grid-6`) to 5 (`.grid-5`, base rule + all 3 responsive breakpoints + child-selector rules renamed together).
+- The R² computation itself was kept (feeds a new low-confidence explanatory caption shown only when a product's confidence is genuinely low, rather than removing the honest signal outright — a manager acting on an order-quantity recommendation still needs to know when the underlying forecast has no demonstrated skill).
+- "Poor"/"Low" qualitative wording reworded to "Limited" throughout (dashboard tile, export report), on the reasoning that the same honest signal reads as "here's a data limitation to be aware of" rather than "this app doesn't work" — while still not fabricating a fake accuracy number.
+- Stars removed from the exported report's "Forecast Confidence" field per explicit request (was the last remaining place `getConfidenceLabel()` returned star-emoji strings; now plain text — "Excellent"/"Good"/"Fair"/"Limited" — matching the dashboard tile's convention).
+
+### 19.6 Pre-Train AI Preview Removed Entirely
+
+Per direct user request, removed the "Before You Train — AI Preview" feature shipped in Phase 3 (§17.3) completely rather than leaving it disabled: the HTML card, its CSS classes, the `loadPreTrainAnalysis()` JS function and its element references, the `GET /api/forecast/pre-train-analysis` backend route, and the `core/forecasting/analysis.py` module it depended on (deleted outright — `analyze_pretrain_characteristics()` was its only export). Confirmed via repo-wide grep that no other code references any of it. The real training-progress bar (the other half of Phase 3) is unaffected.
+
+### 19.7 Final Code-Review Pass
+
+Ran an 8-angle, 7-agent parallel code review (per the project's `code-review` skill, high effort) against every change made since the last push, covering §19.3–19.6 above. 10 findings confirmed and fixed:
+
+| # | Bug | Fix |
+|---|---|---|
+| 1–2 | `if (modelData && modelData.MAPE)` / `.R2` treated a genuinely trained value of exactly `0` as absent (falsy-zero), silently keeping a stale fallback value | Changed to explicit `!== undefined` checks |
+| 3 | The new low-confidence note wasn't cleared on a forecast error or product switch — a stale note from a previous product could stay visible under a different one's blank/errored summary | Added `setLowConfidenceNote(null)` to the error path |
+| 4 | The note said "for this product" but computed a dataset-wide date span, identical regardless of which product was selected | Reworded to "in your dataset" — an accurate description of what the number actually measures |
+| 5 | `.text-2xs` CSS class used in 6 places (including the new note) was never defined anywhere in `styles.css` — a pre-existing gap, not new to this session | Added the missing class definition (`0.68rem`) |
+| 6 | The `0.7`/`1.3` price-scenario bound was hardcoded independently in 3 files (`models.py`, `routers/forecasting.py`, `train_pipeline.py`) | Extracted to `PRICE_SCENARIO_MULTIPLIER_MIN/MAX` in `models.py`, imported by the other two |
+| 7 | `getAccuracyTileLabel()` re-encoded the same MAPE thresholds already in `METRICS_EXPLAINER.MAPE.ratingFn` (Learning Center glossary) | Now derives its label from `ratingFn()` and remaps "Poor" → "Limited" |
+| 8 | The low-confidence note recomputed a date-span via raw `Date` subtraction instead of reading `state.datasetStats.days_span`, which the backend already computes and the app already displays elsewhere | Reads the existing field directly |
+| 9 | The note's logic was 4 levels of inline nested `if`s, unlike its sibling label functions | Extracted to named `getLowConfidenceNote()`/`setLowConfidenceNote()` |
+| 10 | `.italic` utility class — used in 3 pre-existing places (the "Simulation Estimate" badge, both What-If baseline delta labels) — was, like `.text-2xs`, never actually defined | Added the missing class definition |
+
+Also re-ran `verify_pipeline.py`, `verify_training.py`, and `verify_agent.py` (all pass) to confirm nothing in this session's changes broke the existing pipeline, training, or the 11 AI Analyst tools. `verify_agent.py` initially failed with a `KeyError` — traced to the script hardcoding a demo-dataset product ID (`PRD_01`) while the user's own real dataset (different ID convention, `P001`) was the currently active one on disk; not a real bug, confirmed by temporarily swapping in the demo dataset (backing up and restoring the user's real file around the test) and re-running clean.
+
+---
+
+*This document was last updated 2026-07-16 to add §17–§19 (the final 5-phase development cycle, the real-world bug-fix round, and the UX honesty/jargon-removal pass) and to correct stale references to the retired Linear Regression/Random Forest model pair throughout §2, §4.2, §9.7, §12, and §13. §19 documents working-tree state that was not yet committed at time of writing — check `git log` for the current commit boundary before treating §19.3 onward as shipped.*

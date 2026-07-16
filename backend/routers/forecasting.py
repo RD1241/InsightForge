@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 # Standardize path imports
 from core.forecasting.train_pipeline import run_training_pipeline, generate_future_forecast, get_training_progress
 from core.forecasting.registry import get_product_models, load_training_report, clear_model_cache
-from core.forecasting.analysis import analyze_pretrain_characteristics
+from core.forecasting.models import PRICE_SCENARIO_MULTIPLIER_MIN, PRICE_SCENARIO_MULTIPLIER_MAX
 from routers.dataset import get_active_df, get_clean_df
 
 router = APIRouter(prefix="/api/forecast", tags=["Forecasting"])
@@ -15,24 +15,6 @@ router = APIRouter(prefix="/api/forecast", tags=["Forecasting"])
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 ACTIVE_DATASET_PATH = os.path.join(DATA_DIR, "active_dataset.csv")
-
-@router.get("/pre-train-analysis")
-async def get_pre_train_analysis():
-    """
-    Cheap, model-free preview of which forecasting model is likely to perform best,
-    shown above the Train button before the user commits to a training run. Purely
-    descriptive-statistics based — see core/forecasting/analysis.py.
-    """
-    if not os.path.exists(ACTIVE_DATASET_PATH):
-        raise HTTPException(status_code=404, detail="No active dataset found. Load data first.")
-    try:
-        df_clean = get_clean_df()
-        return analyze_pretrain_characteristics(df_clean)
-    except Exception as e:
-        import logging
-        logger = logging.getLogger("insightforge")
-        logger.error(f"Failed to analyze dataset characteristics: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to analyze dataset. Please try again.")
 
 @router.get("/train/progress")
 async def get_train_progress():
@@ -87,7 +69,7 @@ async def predict_demand(
     product_id: str = Query(..., description="ID of the product to forecast"),
     model_name: str = Query(None, description="Specific model to use (defaults to recommended)"),
     horizon_days: int = Query(30, ge=7, le=90, description="Forecast horizon in days (7 to 90)"),
-    price_multiplier: float = Query(1.0, ge=0.7, le=1.3, description="What-if price modifier"),
+    price_multiplier: float = Query(1.0, ge=PRICE_SCENARIO_MULTIPLIER_MIN, le=PRICE_SCENARIO_MULTIPLIER_MAX, description="What-if price modifier"),
     promo_days: str = Query("", description="Comma-separated future promotion day offsets")
 ):
     """
