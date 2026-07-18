@@ -1,0 +1,10 @@
+[
+    {
+        "role": "user",
+        "content": "\ud83d\udce6 What should I reorder?"
+    },
+    {
+        "role": "assistant",
+        "content": "Based on the current stock levels and average daily sales, I recommend reordering the following products:\n\n1. Free Range Eggs 12pk (PRD_03) - with only 2.9 days of stock remaining, this product is at risk of running out of stock soon.\n2. Whole Wheat Bread (PRD_02) - with 4.2 days of stock remaining, this product is also running low and should be reordered to avoid stockouts.\n\nThese two products have the lowest number of days of stock remaining, indicating that they are likely to sell out soon. Reordering them will help ensure that you can continue to meet customer demand and avoid lost sales."
+    }
+]

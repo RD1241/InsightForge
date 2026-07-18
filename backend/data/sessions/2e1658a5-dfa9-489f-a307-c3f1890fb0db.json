@@ -1,0 +1,26 @@
+[
+    {
+        "role": "user",
+        "content": "show me a pie chart of top 5 products with most stocks"
+    },
+    {
+        "role": "assistant",
+        "content": "The top product with the most stock on hand is Tata Salt 1kg, with 25,606 units available. This product accounts for the largest portion of the donut chart, indicating the highest stock levels among the top 5 products."
+    },
+    {
+        "role": "user",
+        "content": "show top 10 products with lowest stock"
+    },
+    {
+        "role": "assistant",
+        "content": "It seems there's been a mistake. The provided data shows the top products with the highest stock levels, not the lowest. To get the correct information, please re-run the query to show the top 10 products with the lowest stock. \n\nIf you'd like, I can help you upload a new dataset or load the demo to get the correct information."
+    },
+    {
+        "role": "user",
+        "content": "i mean show me least 10 products with lowest level of stock"
+    },
+    {
+        "role": "assistant",
+        "content": "It seems the provided data is for the top products with the highest stock levels, not the lowest. The product with the \"lowest\" stock level in this list is Fortune Sunflower Oil 1L, with 23,325 units available. \n\nTo get the correct information, please re-run the query to show the products with the lowest stock levels. If you'd like, I can help you upload a new dataset or load the demo to get the correct information."
+    }
+]

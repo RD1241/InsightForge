@@ -1,0 +1,18 @@
+[
+    {
+        "role": "user",
+        "content": "show me a pie chart of profit and loss of last 30 days"
+    },
+    {
+        "role": "assistant",
+        "content": "It seems there's been a misunderstanding. The provided data is for a line chart showing profit in \u20b9 by date for the last 30 days, not a pie chart of profit and loss. The chart displays the daily profit amounts, with the highest profit being \u20b9100,018.72 on 2025-04-11 and the lowest being \u20b948,943.89 on 2025-04-15."
+    },
+    {
+        "role": "user",
+        "content": "show me pie of top 5 products"
+    },
+    {
+        "role": "assistant",
+        "content": "The top 5 products by units sold are led by Tata Salt 1kg with 6,353 units, closely followed by Sprite 750ml with 6,033 units."
+    }
+]

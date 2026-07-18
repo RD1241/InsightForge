@@ -1,0 +1,10 @@
+[
+    {
+        "role": "user",
+        "content": "can u make me pie chart of last 30 days of top 5 proucts"
+    },
+    {
+        "role": "assistant",
+        "content": "Here is a caption for the donut chart: The top-selling product over the last 30 days is Tomatoes, with 1845 units sold, closely followed by Classmate Notebook with 1821 units sold."
+    }
+]
