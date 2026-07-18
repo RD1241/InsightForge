@@ -72,8 +72,37 @@ def resolve_product_id(input_str: str) -> str:
                 return pid
     except Exception:
         pass
-        
+
     return input_str
+
+
+def _summarize_chart_for_llm(tool_name: str, tool_output: dict) -> dict:
+    """
+    Strips a generate_chart_spec result down to a few representative points before
+    it goes into the synthesis LLM's prompt. The full x/y arrays (e.g. a ~700-point
+    daily date series) are what the chart itself renders from - the LLM only needs
+    enough to write a 1-2 sentence caption, and sending it every raw point wastes
+    tokens for no benefit and risks tripping the provider's request size/rate limit.
+    The chart returned to the frontend is unaffected - this only touches the copy
+    built for the LLM prompt.
+    """
+    if tool_name != "generate_chart_spec" or not isinstance(tool_output, dict):
+        return tool_output
+    chart = tool_output.get("chart")
+    if not isinstance(chart, dict) or not isinstance(chart.get("y"), list):
+        return tool_output
+    y, x = chart["y"], chart.get("x", [])
+    if len(y) <= 12:
+        return tool_output
+    summarized_chart = {k: v for k, v in chart.items() if k not in ("x", "y")}
+    summarized_chart.update({
+        "point_count": len(y),
+        "min_value": min(y),
+        "max_value": max(y),
+        "first_points": list(zip(x[:3], y[:3])),
+        "last_points": list(zip(x[-3:], y[-3:])),
+    })
+    return {**tool_output, "chart": summarized_chart}
 
 async def run_agent_query(user_message: str, session_id: str) -> dict:
     """
@@ -232,24 +261,33 @@ RULES:
     for msg in history:
         final_messages.append(msg)
         
-    # Add current context
+    # Add current context. Chart specs get summarized before going in the prompt -
+    # the LLM only ever needs to write a short caption (see rule 7 above), never
+    # every raw point, and a full ~700-point date series dumped into the prompt
+    # verbatim is exactly what was tripping the synthesis call's token/size limit.
     context_str = ""
     if tool_output:
-        context_str = f"\n\n[Structured Data Context from Backend Tool: '{tool_name}']\n{json.dumps(tool_output, indent=2)}"
+        context_for_llm = _summarize_chart_for_llm(tool_name, tool_output)
+        context_str = f"\n\n[Structured Data Context from Backend Tool: '{tool_name}']\n{json.dumps(context_for_llm, indent=2)}"
     else:
         context_str = "\n\n[Structured Data Context]: No backend tool was called. Answer general retail or forecasting questions."
-        
+
     final_messages.append({"role": "user", "content": f"{user_message}{context_str}"})
-    
-    # Call final summarization
+
+    # Call final summarization. On failure, never dump the raw tool JSON back at the
+    # user (a wall of unformatted numbers is unusable) - the chart itself (if any)
+    # still renders separately in the UI regardless of this text response.
     try:
         final_response = await call_llm(final_messages)
     except Exception as e:
-        final_response = (
-            f"I apologize, but I could not contact the LLM completions service. "
-            f"Here is the raw data computed from our backend tools instead:\n"
-            f"{json.dumps(tool_output, indent=2) if tool_output else 'No data context available.'}"
-        )
+        print(f"Synthesis LLM call failed: {str(e)}")
+        has_data = isinstance(tool_output, dict) and tool_output.get("status") == "success"
+        if tool_name == "generate_chart_spec" and has_data:
+            final_response = "I've generated the chart below from your real data, but couldn't reach the AI service to write a summary for it right now - take a look at the chart directly."
+        elif has_data:
+            final_response = "I found the data for that, but couldn't reach the AI service to put it into words right now. Please try again in a moment."
+        else:
+            final_response = "I'm having trouble reaching the AI service right now. Please try again in a moment."
         
     # Update session memory
     add_message_to_history(session_id, "user", user_message)
